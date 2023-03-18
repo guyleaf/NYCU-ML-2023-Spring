@@ -221,6 +221,18 @@ namespace algebra
     }
 
     template <typename T>
+    T Matrix2d<T>::min() const
+    {
+        return this->_data.min();
+    }
+
+    template <typename T>
+    T Matrix2d<T>::max() const
+    {
+        return this->_data.max();
+    }
+
+    template <typename T>
     Matrix2d<T> Matrix2d<T>::pow(double power) const
     {
         return Matrix2d<T>(this->_rows, this->_cols, std::pow(this->_data, power));

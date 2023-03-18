@@ -9,7 +9,7 @@
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${command:cmake.launchTargetPath}",
-      "args": ["0", "${cwd}/data", ">", "output.log"],
+      "args": ["1", "${cwd}/data", ">", "output.log"],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/build",
       "environment": [

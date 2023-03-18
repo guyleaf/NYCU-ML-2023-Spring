@@ -39,7 +39,7 @@ enum FunctionMode
 };
 
 using ByteMatrix = algebra::Matrix2d<unsigned char>;
-using DataMatrix = algebra::Matrix2d<long double>;
+using DataMatrix = algebra::Matrix2d<double>;
 
 struct ImageSize
 {
@@ -131,11 +131,11 @@ std::array<DataMatrix, NUMBER_OF_LABELS> preprocess(const FileBody &imagesFile, 
     return data;
 }
 
-std::array<long double, NUMBER_OF_LABELS> calculatePriors(const std::array<DataMatrix, NUMBER_OF_LABELS> &data, int numberOfImages)
+std::array<double, NUMBER_OF_LABELS> calculatePriors(const std::array<DataMatrix, NUMBER_OF_LABELS> &data, int numberOfImages)
 {
-    const long double dominator = numberOfImages + NUMBER_OF_LABELS;
+    const double dominator = numberOfImages + NUMBER_OF_LABELS;
 
-    std::array<long double, NUMBER_OF_LABELS> priors;
+    std::array<double, NUMBER_OF_LABELS> priors;
     for (std::size_t i = 0; i < NUMBER_OF_LABELS; i++)
     {
         // # of images which is label i / total images
@@ -144,33 +144,12 @@ std::array<long double, NUMBER_OF_LABELS> calculatePriors(const std::array<DataM
     return priors;
 }
 
-// long double calculateEvidenceInDiscreteMode(const std::valarray<unsigned char> &image, const std::array<DataMatrix, NUMBER_OF_LABELS> &data, int numberOfImages)
-// {
-//     long double evidence = 0;
-
-//     const unsigned int sizeOfBin = RANGE_OF_GRAY_SCALE / NUMBER_OF_BINS;
-//     const auto numberOfPixels = image.size();
-//     const auto dominator = std::log(numberOfImages + 1);
-//     for (std::size_t i = 0; i < numberOfPixels; i++)
-//     {
-//         auto pixel = image[i] / sizeOfBin;
-//         auto fn = [i, pixel](long double acc, const DataMatrix &pixels)
-//         {
-//             return acc + pixels(i, pixel);
-//         };
-//         auto count = std::accumulate(std::begin(data), std::end(data), 0.0, fn) + 1;
-//         evidence += (std::log(count) - dominator);
-//     }
-
-//     return evidence;
-// }
-
-long double calculateLikelihoodInDiscreteMode(const std::valarray<unsigned char> &image, const DataMatrix &data)
+double calculateLikelihoodInDiscreteMode(const std::valarray<unsigned char> &image, const DataMatrix &data)
 {
     const auto numberOfPixels = image.size();
     const auto numberOfImages = data.row(0).sum() + 1;
 
-    long double result = 0;
+    double result = 0;
     for (std::size_t i = 0; i < numberOfPixels; i++)
     {
         result += std::log((data(i, image[i]) + 1) / numberOfImages);
@@ -178,10 +157,10 @@ long double calculateLikelihoodInDiscreteMode(const std::valarray<unsigned char>
     return result;
 }
 
-void printPosteriors(const std::valarray<long double> &posteriors)
+void printPosteriors(const std::valarray<double> &posteriors)
 {
     const auto originalPrecision = std::cout.precision();
-    std::cout.precision(std::numeric_limits<long double>::max_digits10);
+    std::cout.precision(std::numeric_limits<double>::max_digits10);
     std::cout << "Posterior (in log scale):" << std::endl;
     for (std::size_t i = 0; i < posteriors.size(); i++)
     {
@@ -218,17 +197,16 @@ void printLabels(const std::array<DataMatrix, NUMBER_OF_LABELS> &data, const Ima
 
 void classifyImagesInDiscreteMode(const FileBody &imagesFile, const std::array<DataMatrix, NUMBER_OF_LABELS> &data, const FileBody &testImagesFile, const FileBody &testLabelsFile)
 {
-    const std::array<long double, NUMBER_OF_LABELS> priors = calculatePriors(data, imagesFile.numberOfItems);
+    const std::array<double, NUMBER_OF_LABELS> priors = calculatePriors(data, imagesFile.numberOfItems);
 
     const auto &images = testImagesFile.content;
     const unsigned int sizeOfBin = RANGE_OF_GRAY_SCALE / NUMBER_OF_BINS;
 
-    long double errors = 0;
-    std::valarray<long double> posteriors(NUMBER_OF_LABELS);
+    double errors = 0;
+    std::valarray<double> posteriors(NUMBER_OF_LABELS);
     for (int i = 0; i < testImagesFile.numberOfItems; i++)
     {
         auto image = images.row(i) / sizeOfBin;
-        // auto evidence = calculateEvidenceInDiscreteMode(image, data, imagesFile.numberOfItems);
         for (std::size_t j = 0; j < NUMBER_OF_LABELS; j++)
         {
             // condition on label j
@@ -257,50 +235,128 @@ void classifyImagesInDiscreteMode(const FileBody &imagesFile, const std::array<D
     std::cout << "Error rate: " << errors / testImagesFile.numberOfItems << std::endl;
 }
 
-long double getLogProbabilityFromGaussianDistribution(long double mean, long double std, long double x)
+double getLogProbabilityFromGaussianDistribution(double mean, double std, double x)
 {
     // log f(x) = -0.5 * ((x - mean) / std)^2 - log (std * sqrt(PI * 2))
-    return -0.5 * std::pow(((x - mean) / std), 2) - std::log(std * std::sqrt(M_PI * 2));
+    // eps = 1e-2 to avoid division by zero
+    std += 1e-2;
+    return -0.5 * std::pow((x - mean) / std, 2) - 0.5 * std::log(std::pow(std, 2) * M_PI * 2);
 }
 
-long double calculateEvidenceInContinuousMode(const std::valarray<unsigned char> &image, const std::array<DataMatrix, NUMBER_OF_LABELS> &data, int numberOfImages)
+std::array<DataMatrix, NUMBER_OF_LABELS> findGaussianParameters(const std::array<DataMatrix, NUMBER_OF_LABELS> &data)
 {
-    long double evidence = 0;
+    std::array<DataMatrix, NUMBER_OF_LABELS> result;
 
-    const auto numberOfPixels = image.size();
-    const auto dominator = std::log(numberOfImages);
-    for (std::size_t i = 0; i < numberOfPixels; i++)
+    const auto numberOfPixels = data[0].rows();
+    for (std::size_t i = 0; i < NUMBER_OF_LABELS; i++)
     {
-        auto pixel = image[i];
-        auto fn = [i, pixel](long double acc, const DataMatrix &pixels)
+        auto params = DataMatrix(numberOfPixels, 2);
+
+        const auto &pixels = data[i];
+        for (std::size_t j = 0; j < numberOfPixels; j++)
         {
-            return acc + pixels(i, pixel);
-        };
-        auto count = std::accumulate(std::begin(data), std::end(data), 0.0, fn) + 1;
-        evidence += (std::log(count) - dominator);
-    }
+            double mean = 0, N = 1;
 
-    return evidence;
-}
+            for (int scale = 0; scale < RANGE_OF_GRAY_SCALE; scale++)
+            {
+                auto count = pixels(j, scale);
+                mean += (count * (static_cast<double>(scale) / (RANGE_OF_GRAY_SCALE - 1)));
+                N += count;
+            }
+            mean /= N;
 
-long double calculateLikelihoodInContinuousMode(const std::valarray<unsigned char> &image, const DataMatrix &data)
-{
-    const auto numberOfPixels = image.size();
-    const auto numberOfImages = data.row(0).sum();
+            double std = std::pow(-mean, 2);
+            for (int scale = 0; scale < RANGE_OF_GRAY_SCALE; scale++)
+            {
+                auto tmp = pixels(j, scale);
+                std += tmp * std::pow((static_cast<double>(scale) / (RANGE_OF_GRAY_SCALE - 1)) - mean, 2);
+            }
+            std = std::sqrt(std / N);
 
-    long double result = 0;
-    const auto dominator = std::log(numberOfImages);
-    for (std::size_t i = 0; i < numberOfPixels; i++)
-    {
-        auto convertedPixel = image[i];
-        result += (std::log(data(i, convertedPixel) + 1) - dominator);
+            params(j, 0) = mean;
+            params(j, 1) = std;
+        }
+
+        result[i] = params;
     }
     return result;
 }
 
+double calculateLikelihoodInContinuousMode(const std::valarray<unsigned char> &image, const DataMatrix &dists)
+{
+    const auto numberOfPixels = image.size();
+
+    double result = 0;
+    for (std::size_t i = 0; i < numberOfPixels; i++)
+    {
+        auto value = static_cast<double>(image[i]) / (RANGE_OF_GRAY_SCALE - 1);
+        result += getLogProbabilityFromGaussianDistribution(dists(i, 0), dists(i, 1), value);
+    }
+    return result;
+}
+
+void printLabelsForGaussian(const std::array<DataMatrix, NUMBER_OF_LABELS> &gaussianParams, const ImageSize &imageSize)
+{
+    std::cout << "Imagination of numbers in Bayesian classifier:" << std::endl
+              << std::endl;
+
+    for (std::size_t i = 0; i < NUMBER_OF_LABELS; i++)
+    {
+        const auto &params = gaussianParams[i];
+        const auto numberOfPixels = params.rows();
+        std::cout << i << ":" << std::endl;
+        for (std::size_t j = 0; j < numberOfPixels; j++)
+        {
+            std::cout << (params(j, 0) >= 0.5) << " ";
+            if ((j + 1) % imageSize.width == 0)
+            {
+                std::cout << std::endl;
+            }
+        }
+
+        std::cout << std::endl;
+    }
+}
+
 void classifyImagesInContinuousMode(const FileBody &imagesFile, const std::array<DataMatrix, NUMBER_OF_LABELS> &data, const FileBody &testImagesFile, const FileBody &testLabelsFile)
 {
-    const std::array<long double, NUMBER_OF_LABELS> priors = calculatePriors(data, imagesFile.numberOfItems);
+    const auto priors = calculatePriors(data, imagesFile.numberOfItems);
+    const auto gaussianParams = findGaussianParameters(data);
+
+    const auto &images = testImagesFile.content;
+
+    double errors = 0;
+    std::valarray<double> posteriors(NUMBER_OF_LABELS);
+    for (int i = 0; i < testImagesFile.numberOfItems; i++)
+    {
+        auto image = images.row(i);
+        for (std::size_t j = 0; j < NUMBER_OF_LABELS; j++)
+        {
+            // condition on label j
+            const auto &params = gaussianParams[j];
+            posteriors[j] = calculateLikelihoodInContinuousMode(image, params) + priors[j];
+        }
+
+        // use softmax to normalize posteriors
+        posteriors = std::exp(posteriors - posteriors.max());
+        posteriors /= posteriors.sum();
+
+        printPosteriors(posteriors);
+
+        auto prediction = std::distance(std::begin(posteriors), std::max_element(std::begin(posteriors), std::end(posteriors)));
+        auto groundTruth = testLabelsFile.content(i, 0);
+        std::cout << "Prediction: "
+                  << prediction
+                  << ", Ans: "
+                  << static_cast<unsigned>(groundTruth) << std::endl
+                  << std::endl;
+
+        errors += (prediction != groundTruth);
+    }
+
+    printLabelsForGaussian(gaussianParams, imagesFile.imageSize);
+
+    std::cout << "Error rate: " << errors / testImagesFile.numberOfItems << std::endl;
 }
 
 int main(int argc, char *argv[])

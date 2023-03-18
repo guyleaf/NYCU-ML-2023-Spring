@@ -66,6 +66,8 @@ namespace algebra
         Matrix2d<value_type> inverse() const;
         value_type sum() const;
         value_type mean() const;
+        value_type min() const;
+        value_type max() const;
         Matrix2d<value_type> pow(double power) const;
 
         // define iterators
