@@ -109,4 +109,5 @@
         "xtree": "cpp",
         "*.ipp": "cpp"
     },
+    "cmake.sourceDirectory": "${workspaceFolder}/.",
 }
