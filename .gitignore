@@ -1,7 +1,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/cmake,c++,visualstudiocode,macos,linux,windows,visualstudio
 # Edit at https://www.toptal.com/developers/gitignore?templates=cmake,c++,visualstudiocode,macos,linux,windows,visualstudio
 
-
+*.zip
 build*/
 
 ### C++ ###
