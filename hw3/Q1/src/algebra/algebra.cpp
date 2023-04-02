@@ -1,4 +1,4 @@
-#include <algebra/algebra.hpp>
+#include <algebra/algebra.h>
 
 #include <valarray>
 #include <random>
@@ -50,7 +50,7 @@ namespace algebra
     Matrix2d<T> randu(std::size_t n, std::size_t m, RNG &gen, T a, T b)
     {
         algebra::Matrix2d<T> result(n, m);
-        auto dist = std::uniform_real_distribution<double>(a, b);
+        auto dist = std::uniform_real_distribution(a, b);
         for (auto &item : result)
         {
             item = dist(gen);
@@ -67,18 +67,26 @@ namespace algebra
         matrix.row(r2) = row1;
     }
 
-#define DEFINE_TEMPLATE_FUNCTIONS(_Type, _RNG)                                      \
-    template Matrix2d<_Type> eye(std::size_t);                                \
-    template Matrix2d<_Type> eye(std::size_t, _Type);                 \
-    template Matrix2d<_Type> zeros(std::size_t);                              \
-    template Matrix2d<_Type> zeros(std::size_t, std::size_t);                 \
-    template Matrix2d<_Type> randn(std::size_t, std::size_t, _RNG &); \
-    template Matrix2d<_Type> randu(std::size_t, std::size_t, _RNG &, _Type, _Type); \
+#define DEFINE_TEMPLATE_FUNCTIONS(_Type)                      \
+    template Matrix2d<_Type> eye(std::size_t);                \
+    template Matrix2d<_Type> eye(std::size_t, _Type);         \
+    template Matrix2d<_Type> zeros(std::size_t);              \
+    template Matrix2d<_Type> zeros(std::size_t, std::size_t); \
     template void swapRows(Matrix2d<_Type> &matrix, std::size_t r1, std::size_t r2);
 
-    DEFINE_TEMPLATE_FUNCTIONS(double, std::mt19937)
-    DEFINE_TEMPLATE_FUNCTIONS(long double, std::mt19937)
-    DEFINE_TEMPLATE_FUNCTIONS(unsigned char, std::mt19937)
-#undef DEFINE_BINARY_OPERATOR
+    DEFINE_TEMPLATE_FUNCTIONS(double)
+    DEFINE_TEMPLATE_FUNCTIONS(long double)
+
+#define DEFINE_TEMPLATE_RANDOM_FUNCTIONS(_Type, _RNG)                       \
+    template Matrix2d<_Type> randn(std::size_t, std::size_t, _RNG &); \
+    template Matrix2d<_Type> randu(std::size_t, std::size_t, _RNG &, _Type, _Type);
+
+    DEFINE_TEMPLATE_RANDOM_FUNCTIONS(double, std::mt19937)
+    DEFINE_TEMPLATE_RANDOM_FUNCTIONS(double, std::mt19937_64)
+    DEFINE_TEMPLATE_RANDOM_FUNCTIONS(long double, std::mt19937)
+    DEFINE_TEMPLATE_RANDOM_FUNCTIONS(long double, std::mt19937_64)
+
+#undef DEFINE_TEMPLATE_FUNCTIONS
+#undef DEFINE_TEMPLATE_RANDOM_FUNCTIONS
 
 } // namespace algebra

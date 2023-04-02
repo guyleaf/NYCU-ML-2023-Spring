@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16...3.25)
 
-project(mlhw3_q1 VERSION 1.0
-    DESCRIPTION "Machine Learning HW3 Q1"
+project(mlhw3_q2 VERSION 1.0
+    DESCRIPTION "Machine Learning HW3 Q2"
     LANGUAGES CXX
 )
 
@@ -30,9 +30,13 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     # endif()
 endif()
 
-add_subdirectory(src)
+add_subdirectory(libs)
 
 # Main executable code
-add_executable(mlhw3_q1 main.cpp)
+add_executable(mlhw3_q2 main.cpp)
 
-target_link_libraries(mlhw3_q1 PRIVATE src_library)
+target_compile_features(mlhw3_q2 PRIVATE cxx_std_14)
+
+target_include_directories(mlhw3_q2 PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
+target_link_libraries(mlhw3_q2 PRIVATE libs)

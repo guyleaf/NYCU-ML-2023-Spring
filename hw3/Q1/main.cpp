@@ -4,7 +4,7 @@
 #include <vector>
 
 #include <algebra/matrix.hpp>
-#include <generator/generator.hpp>
+#include <generator/generator.h>
 
 int main(int argc, char *argv[])
 {
@@ -19,13 +19,10 @@ int main(int argc, char *argv[])
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    int mode = std::stoi(argv[1]);
-    switch (mode)
+    switch (int mode = std::stoi(argv[1]))
     {
         case 0:
         {
-            std::cout << "mode0" << std::endl;
-
             double mean = std::stod(argv[2]);
             double variance = std::stod(argv[3]);
 
@@ -34,8 +31,6 @@ int main(int argc, char *argv[])
         }
         case 1:
         {
-            std::cout << "mode1" << std::endl;
-
             int n = std::stoi(argv[2]);
             if (n < 1 || (argc - 4) != n)
             {
@@ -51,8 +46,8 @@ int main(int argc, char *argv[])
                 weights(i, 0) = std::stod(argv[4 + i]);
             }
 
-            auto result = generator::generate_point_from_ploynomial_basis(weights, variance, gen);
-            std::cout << "Result: x = " << result.first << ", y = " << result.second << std::endl;
+            auto [x, y] = generator::generate_point_from_ploynomial_basis(weights, variance, gen);
+            std::cout << "Result: x = " << x << ", y = " << y << std::endl;
             break;
         }
         default:

@@ -1,8 +1,5 @@
 add_subdirectory("algebra")
-
-add_library(generator_library INTERFACE)
-target_include_directories(generator_library INTERFACE "${PROJECT_SOURCE_DIR}/include")
-target_compile_features(generator_library INTERFACE cxx_std_11)
+add_subdirectory("generator")
 
 add_library(src_library INTERFACE)
 target_link_libraries(src_library INTERFACE algebra_library generator_library)

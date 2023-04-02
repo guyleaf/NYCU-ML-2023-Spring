@@ -1,5 +1,5 @@
 #include <algebra/matrix.hpp>
-#include <algebra/algebra.hpp>
+#include <algebra/algebra.h>
 
 #include <iostream>
 #include <string>
@@ -223,7 +223,8 @@ namespace algebra
     template <typename T>
     T Matrix2d<T>::mean() const
     {
-        return this->_data.sum() / this->_data.size();
+        auto size = static_cast<double>(this->_data.size());
+        return this->_data.sum() / size;
     }
 
     template <typename T>
@@ -367,8 +368,4 @@ namespace algebra
 
     template class Matrix2d<double>;
     template class Matrix2d<long double>;
-
-    template <>
-    Matrix2d<unsigned char> Matrix2d<unsigned char>::pow(double power) const = delete;
-    template class Matrix2d<unsigned char>;
 }
