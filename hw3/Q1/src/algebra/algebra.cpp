@@ -50,7 +50,7 @@ namespace algebra
     Matrix2d<T> randu(std::size_t n, std::size_t m, RNG &gen, T a, T b)
     {
         algebra::Matrix2d<T> result(n, m);
-        auto dist = std::uniform_real_distribution(a, b);
+        auto dist = std::uniform_real_distribution<T>(a, b);
         for (auto &item : result)
         {
             item = dist(gen);

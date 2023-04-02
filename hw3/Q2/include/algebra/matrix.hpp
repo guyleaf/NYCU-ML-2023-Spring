@@ -76,25 +76,9 @@ namespace algebra
         {
             return std::begin(this->_data);
         }
-        inline auto begin() const
-        {
-            return std::cbegin(this->_data);
-        }
         inline auto end()
         {
             return std::end(this->_data);
-        }
-        inline auto end() const
-        {
-            return std::cend(this->_data);
-        }
-        inline auto cbegin() const
-        {
-            return std::cbegin(this->_data);
-        }
-        inline auto cend() const
-        {
-            return std::cend(this->_data);
         }
 
         // TODO: Support slicing matrix?

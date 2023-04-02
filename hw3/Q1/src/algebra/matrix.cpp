@@ -240,6 +240,12 @@ namespace algebra
     }
 
     template <typename T>
+    Matrix2d<T> Matrix2d<T>::abs() const
+    {
+        return Matrix2d<T>(this->_rows, this->_cols, std::abs(this->_data));
+    }
+
+    template <typename T>
     Matrix2d<T> Matrix2d<T>::pow(double power) const
     {
         return Matrix2d<T>(this->_rows, this->_cols, std::pow(this->_data, power));

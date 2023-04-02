@@ -20,19 +20,19 @@ namespace generator
     std::pair<double, double> generate_point_from_ploynomial_basis(const algebra::Matrix2d<double> &weights, double var, RNG& rng)
     {
         // [a, b)
-        std::uniform_real_distribution uniform_dist(-1.0 + 1e-15, 1.0);
+        std::uniform_real_distribution<double> uniform_dist(-1.0, 1.0);
         const double e = generate_from_normal_distribution(0, var, rng);
 
         double x = uniform_dist(rng);
         std::size_t n = weights.rows();
-        algebra::Matrix2d designMatrix(n, 1, 1.0);
+        algebra::Matrix2d<double> designMatrix(n, 1, 1.0);
         for (std::size_t i = 1; i < n; i++)
         {
-            designMatrix(i, 0) *= x;
+            designMatrix(i, 0) = x;
             x *= x;
         }
 
-        auto y = (weights.transpose() * designMatrix + e).item();
+        auto y = (weights.transpose() * designMatrix).item() + e;
         return std::make_pair(x, y);
     }
 
