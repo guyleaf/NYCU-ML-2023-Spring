@@ -20,7 +20,7 @@
 
 #define TITLE "ML HW3"
 
-constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-4;
+constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-3;
 
 constexpr ImVec2 DATA_RANGES = ImVec2(-2, 2);
 constexpr int DATA_COUNTS = 200;
@@ -55,12 +55,11 @@ GLFWwindow *setUpGUI()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);           // 3.0+ only
 
     // Create window with graphics context
-    GLFWwindow *window = glfwCreateWindow(1280, 720, TITLE, NULL, NULL);
-    if (window == NULL)
+    GLFWwindow *window = glfwCreateWindow(1280, 720, TITLE, nullptr, nullptr);
+    if (window == nullptr)
         return nullptr;
 
     glfwMakeContextCurrent(window);
-    // glfwSwapInterval(1); // Enable vsync
     glfwSwapInterval(0);
 
     // Setup Dear ImGui context
@@ -69,39 +68,17 @@ GLFWwindow *setUpGUI()
     ImPlot::CreateContext();
 
     ImGuiIO &io = ImGui::GetIO();
-    // (void)io;
-    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    // io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
-    float SCALE = 1;
     ImFontConfig cfg;
-    cfg.SizePixels = 15 * SCALE;
-    ImFont *font = io.Fonts->AddFontDefault(&cfg);
+    cfg.SizePixels = 15;
+    io.Fonts->AddFontDefault(&cfg);
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple fonts and use ImGui::PushFont()/PopFont() to select them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return NULL. Please handle those errors in your application (e.g. use an assertion, or display an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and stored into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which ImGui_ImplXXXX_NewFrame below will call.
-    // - Use '#define IMGUI_ENABLE_FREETYPE' in your imconfig file to use Freetype for higher quality font rendering.
-    // - Read 'docs/FONTS.md' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string literal you need to write a double backslash \\ !
-    // - Our Emscripten build process allows embedding fonts to be accessible at runtime from the "fonts/" folder. See Makefile.emscripten for details.
-    // io.Fonts->AddFontDefault();
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    // ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
-    // IM_ASSERT(font != NULL);
 
     return window;
 }
@@ -115,8 +92,8 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
     }
 
     // Our state
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    ImVec4 point_color = ImVec4(255, 0, 0, 1);
+    auto clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+    auto point_color = ImVec4(255, 0, 0, 1);
 
     const std::array<int, 3> predictionConditions{static_cast<int>(samples.rows()), 10, 50};
 
@@ -135,7 +112,7 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
 
             ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
             ImGui::SetNextWindowSize(ImVec2(windowSize.x, windowSize.y), ImGuiCond_Always);
-            ImGui::Begin("Result", NULL, ImGuiWindowFlags_NoDecoration);
+            ImGui::Begin("Result", nullptr, ImGuiWindowFlags_NoDecoration);
 
             if (ImPlot::BeginSubplots("Result", 2, 2, ImVec2(windowSize.x, windowSize.y)))
             {
@@ -143,6 +120,7 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                 {
                     ImPlot::SetupAxes("x", "y");
                     ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
+                    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -25, 25);
 
                     ImPlot::SetNextLineStyle(COLOR_RED);
                     ImPlot::PlotLine("f_var1(x)", &groundTruthPoints[0].col(0)[0], &groundTruthPoints[0].col(1)[0], groundTruthPoints[0].rows());
@@ -170,6 +148,7 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                     {
                         ImPlot::SetupAxes("x", "y");
                         ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
+                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -25, 25);
 
                         ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, point_color, IMPLOT_AUTO, point_color);
                         ImPlot::PlotScatter("data", &samples.col(0)[0], &samples.col(1)[0], counts);
@@ -237,7 +216,7 @@ public:
     DataGenerator(const dMatrix2d &weights, double variance) : weights(weights), variance(variance)
     {
         std::random_device rd;
-        rng = std::mt19937(rd());
+        rng = std::mt19937_64(rd());
     }
 
     auto generate()
@@ -249,7 +228,7 @@ public:
     const double variance;
 
 private:
-    std::mt19937 rng;
+    std::mt19937_64 rng;
 };
 
 dMatrix2d makeDegisnMatrix(int basis, double x)
@@ -257,8 +236,7 @@ dMatrix2d makeDegisnMatrix(int basis, double x)
     dMatrix2d designMatrix(1, basis, 1);
     for (int i = 1; i < basis; i++)
     {
-        designMatrix(0, i) = x;
-        x *= x;
+        designMatrix(0, i) = std::pow(x, i);
     }
     return designMatrix;
 }
@@ -322,12 +300,11 @@ void printPredictiveParameters(double mean, double variance)
 
 std::array<dMatrix2d, 3> calculatePredictiveLines(const dMatrix2d &priorMean, const dMatrix2d &priorVariance, double likelihoodVariance, int basis)
 {
+    auto points = getPointsFromFunction(priorMean, 0, DATA_RANGES.x, DATA_RANGES.y, DATA_COUNTS);
+
     std::array<dMatrix2d, 3> lines;
+    lines.fill(points);
 
-    lines[1] = getPointsFromFunction(priorMean, 0, DATA_RANGES.x, DATA_RANGES.y, DATA_COUNTS);
-    lines[0] = lines[2] = lines[1];
-
-    auto &points = lines[1];
     for (std::size_t i = 0; i < points.rows(); i++)
     {
         auto x = points(i, 0);
@@ -346,6 +323,8 @@ void modelDataGenerator(DataGenerator &generator, int basis, double precisionFor
 {
     auto priorMean = algebra::zeros<double>(basis, 1);
     auto priorVariance = algebra::eye<double>(basis, 1 / precisionForInitialPrior);
+    auto a = (1 / generator.variance);
+    auto b = precisionForInitialPrior;
 
     std::vector<double> samples;
 
@@ -375,12 +354,11 @@ void modelDataGenerator(DataGenerator &generator, int basis, double precisionFor
 
         auto designMatrix = makeDegisnMatrix(basis, x);
 
-        double lambda = generator.variance * precisionForInitialPrior;
         auto gramMatrix = designMatrix.transpose() * designMatrix;
 
-        priorMean = (gramMatrix + algebra::eye<double>(basis, lambda)).inverse() * designMatrix.transpose() * y;
-        priorVariance = (1 / generator.variance) * gramMatrix + algebra::eye<double>(basis, precisionForInitialPrior);
+        priorVariance = a * gramMatrix + algebra::eye<double>(basis, b);
         priorVariance = priorVariance.inverse();
+        priorMean = a * priorVariance * designMatrix.transpose() * y;
 
         printPosteriorParameters(priorMean, priorVariance);
         auto [mean, variance] = calculatePredictiveParameters(designMatrix, priorMean, priorVariance, generator.variance);
@@ -415,14 +393,14 @@ int main(int argc, char *argv[])
     double precisionForInitialPrior = std::stod(argv[1]);
 
     int basis = std::stoi(argv[2]);
-    double precisionForModel = std::stod(argv[3]);
+    double variance = std::stod(argv[3]);
     dMatrix2d weights(basis, 1);
     for (std::size_t i = 0; i < basis; i++)
     {
         weights(i, 0) = std::stod(argv[4 + i]);
     }
 
-    DataGenerator generator(weights, 1 / precisionForModel);
+    DataGenerator generator(weights, variance);
     modelDataGenerator(generator, basis, precisionForInitialPrior);
 
     return 0;
