@@ -56,12 +56,6 @@ void estimateGenerator(UnivariateGaussianGenerator &generator)
         dMean = std::abs(dMean - mean);
         dVariance = std::abs(dVariance - variance);
     } while (dMean > STOP_APPROXIMATION_THRESHOLD || dVariance > STOP_APPROXIMATION_THRESHOLD);
-
-    dMean = std::abs(generator.mean - mean);
-    dVariance = std::abs(generator.variance - variance);
-
-    std::cout << std::endl << "Stop!" << std::endl
-              << "dMean = " << dMean << "\tdVariance = " << dVariance << std::endl;
 }
 
 int main(int argc, char *argv[])

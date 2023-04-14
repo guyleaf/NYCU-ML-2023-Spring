@@ -11,22 +11,8 @@ add_library(imgui_backend_opengl3 imgui_impl_opengl3.cpp)
 find_package(OpenGL REQUIRED)
 target_link_libraries(imgui_backend_opengl3 PUBLIC OpenGL::GL)
 
-find_package(GLFW REQUIRED)
-
-if (!GLFW_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(
-        GLFW
-        GIT_REPOSITORY https://github.com/glfw/glfw.git
-        GIT_TAG 3.3.8
-    )
-    FetchContent_MakeAvailable(GLFW)
-
-    target_link_libraries(imgui_backend_glfw PUBLIC GLFW)
-else()
-    target_link_libraries(imgui_backend_glfw PUBLIC ${GLFW_LIBRARIES})
-    target_include_directories(imgui_backend_glfw PUBLIC ${GLFW_INCLUDE_DIR})
-endif()
+find_package(glfw3 3.3 REQUIRED)
+target_link_libraries(imgui_backend_glfw PUBLIC glfw)
 
 target_link_libraries(imgui_backend_glfw PRIVATE imgui_backends_settings)
 target_link_libraries(imgui_backend_opengl3 PRIVATE imgui_backends_settings)

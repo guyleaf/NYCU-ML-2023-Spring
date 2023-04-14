@@ -1,4 +1,4 @@
-add_library(algebra_library algebra.cpp matrix.cpp)
+add_library(algebra_library STATIC algebra.cpp matrix.cpp)
 
 target_include_directories(algebra_library PUBLIC "${PROJECT_SOURCE_DIR}/include")
 

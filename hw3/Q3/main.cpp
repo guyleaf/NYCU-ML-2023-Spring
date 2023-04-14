@@ -20,13 +20,14 @@
 
 #define TITLE "ML HW3"
 
-constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-3;
+constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-6;
 
 constexpr ImVec2 DATA_RANGES = ImVec2(-2, 2);
 constexpr int DATA_COUNTS = 200;
 
-constexpr ImVec4 COLOR_BLACK = ImVec4(0, 0, 0, -1);
-constexpr ImVec4 COLOR_RED = ImVec4(255, 0, 0, -1);
+constexpr ImVec4 COLOR_BLACK = ImVec4(0, 0, 0, 1);
+constexpr ImVec4 COLOR_RED = ImVec4(1, 0, 0, 1);
+constexpr ImVec4 COLOR_BLUE = ImVec4(0, 0, 1, 1);
 
 using dMatrix2d = algebra::Matrix2d<double>;
 
@@ -74,7 +75,8 @@ GLFWwindow *setUpGUI()
     io.Fonts->AddFontDefault(&cfg);
 
     // Setup Dear ImGui style
-    ImGui::StyleColorsDark();
+    ImGui::StyleColorsLight();
+    // ImGui::StyleColorsDark();
 
     // Setup Platform/Renderer backends
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -93,7 +95,6 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
 
     // Our state
     auto clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    auto point_color = ImVec4(255, 0, 0, 1);
 
     const std::array<int, 3> predictionConditions{static_cast<int>(samples.rows()), 10, 50};
 
@@ -119,8 +120,8 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                 if (ImPlot::BeginPlot("Ground truth"))
                 {
                     ImPlot::SetupAxes("x", "y");
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
-                    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -25, 25);
+                    ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
+                    ImPlot::SetupAxisLimits(ImAxis_Y1, -25, 25);
 
                     ImPlot::SetNextLineStyle(COLOR_RED);
                     ImPlot::PlotLine("f_var1(x)", &groundTruthPoints[0].col(0)[0], &groundTruthPoints[0].col(1)[0], groundTruthPoints[0].rows());
@@ -147,10 +148,10 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                     if (ImPlot::BeginPlot(title.c_str()))
                     {
                         ImPlot::SetupAxes("x", "y");
-                        ImPlot::SetupAxisLimitsConstraints(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
-                        ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, -25, 25);
+                        ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
+                        ImPlot::SetupAxisLimits(ImAxis_Y1, -25, 25);
 
-                        ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, point_color, IMPLOT_AUTO, point_color);
+                        ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
                         ImPlot::PlotScatter("data", &samples.col(0)[0], &samples.col(1)[0], counts);
 
                         ImPlot::SetNextLineStyle(COLOR_RED);
@@ -323,8 +324,7 @@ void modelDataGenerator(DataGenerator &generator, int basis, double precisionFor
 {
     auto priorMean = algebra::zeros<double>(basis, 1);
     auto priorVariance = algebra::eye<double>(basis, 1 / precisionForInitialPrior);
-    auto a = (1 / generator.variance);
-    auto b = precisionForInitialPrior;
+    auto aInversed = 1 / generator.variance;
 
     std::vector<double> samples;
 
@@ -354,11 +354,9 @@ void modelDataGenerator(DataGenerator &generator, int basis, double precisionFor
 
         auto designMatrix = makeDegisnMatrix(basis, x);
 
-        auto gramMatrix = designMatrix.transpose() * designMatrix;
-
-        priorVariance = a * gramMatrix + algebra::eye<double>(basis, b);
+        priorVariance = aInversed * designMatrix.transpose() * designMatrix + dVariance.inverse();
         priorVariance = priorVariance.inverse();
-        priorMean = a * priorVariance * designMatrix.transpose() * y;
+        priorMean = priorVariance * (aInversed * designMatrix.transpose() * y + dVariance.inverse() * dMean);
 
         printPosteriorParameters(priorMean, priorVariance);
         auto [mean, variance] = calculatePredictiveParameters(designMatrix, priorMean, priorVariance, generator.variance);
