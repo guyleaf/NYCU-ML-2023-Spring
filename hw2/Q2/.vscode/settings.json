@@ -110,4 +110,5 @@
         "*.ipp": "cpp"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/.",
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
 }
