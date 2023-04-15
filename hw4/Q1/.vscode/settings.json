@@ -82,7 +82,8 @@
         "set": "cpp",
         "unordered_set": "cpp",
         "cinttypes": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "core": "cpp"
     },
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

@@ -19,6 +19,8 @@
 
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
+#define EIGEN_USE_MKL_ALL
+
 #include <Eigen/Core>
 #include <Eigen/LU>
 
