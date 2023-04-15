@@ -19,6 +19,9 @@
 
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
+#include <Eigen/Core>
+#include <Eigen/LU>
+
 #define TITLE "ML HW4"
 
 constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-5;
@@ -28,8 +31,6 @@ constexpr ImVec2 DATA_RANGES = ImVec2(-4.5, 14.5);
 constexpr ImVec4 COLOR_BLACK = ImVec4(0, 0, 0, 1);
 constexpr ImVec4 COLOR_RED = ImVec4(1, 0, 0, 1);
 constexpr ImVec4 COLOR_BLUE = ImVec4(0, 0, 1, 1);
-
-using dMatrix2d = algebra::Matrix2d<double>;
 
 #pragma region Data Structures
 
@@ -48,11 +49,11 @@ public:
         this->rng = std::mt19937_64(rd());
     }
 
-    auto generate()
+    Eigen::Vector2d generate()
     {
-        auto x = generator::generate_from_normal_distribution(this->parameterForX.mean, this->parameterForX.variance, this->rng);
-        auto y = generator::generate_from_normal_distribution(this->parameterForY.mean, this->parameterForY.variance, this->rng);
-        return std::make_pair(x, y);
+        auto x = this->generate_from_normal_distribution(this->parameterForX.mean, this->parameterForX.variance);
+        auto y = this->generate_from_normal_distribution(this->parameterForY.mean, this->parameterForY.variance);
+        return Eigen::Vector2d(x, y);
     }
 
 private:
@@ -60,6 +61,19 @@ private:
 
     GaussianParameter parameterForX;
     GaussianParameter parameterForY;
+
+    double generate_from_normal_distribution(double m, double var)
+    {
+        Eigen::MatrixXd samples = this->randu(12, 1, 0.0, 1.0);
+        return m + std::sqrt(var) * (samples.sum() - 6);
+    }
+
+    Eigen::MatrixXd randu(std::size_t n, std::size_t m, double a, double b)
+    {
+        std::uniform_real_distribution uniform_dist(a, b);
+        auto uniform = [&uniform_dist, &rng = this->rng] () {return uniform_dist(rng);};
+        return Eigen::MatrixXd::NullaryExpr(n, m, uniform);
+    }
 };
 
 #pragma endregion
@@ -117,7 +131,7 @@ GLFWwindow *setUpGUI()
     return window;
 }
 
-void showGUI(const dMatrix2d &points, const dMatrix2d &labels, const dMatrix2d &gradientPredictions, const dMatrix2d &newtonPredictions)
+void showGUI(const Eigen::MatrixX2d &points, const Eigen::VectorXd &labels, const Eigen::VectorXd &gradientPredictions, const Eigen::VectorXd &newtonPredictions)
 {
     auto window = setUpGUI();
     if (window == nullptr)
@@ -153,9 +167,9 @@ void showGUI(const dMatrix2d &points, const dMatrix2d &labels, const dMatrix2d &
                     ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
 
-                    for (std::size_t i = 0; i < points.rows(); i++)
+                    for (Eigen::Index i = 0; i < points.rows(); i++)
                     {
-                        if (labels(i, 0) == 1)
+                        if (labels[i] == 1)
                         {
                             ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
                             ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
@@ -175,9 +189,9 @@ void showGUI(const dMatrix2d &points, const dMatrix2d &labels, const dMatrix2d &
                     ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
 
-                    for (std::size_t i = 0; i < points.rows(); i++)
+                    for (Eigen::Index i = 0; i < points.rows(); i++)
                     {
-                        if (gradientPredictions(i, 0) > 0.5)
+                        if (gradientPredictions[i] > 0.5)
                         {
                             ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
                             ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
@@ -197,9 +211,9 @@ void showGUI(const dMatrix2d &points, const dMatrix2d &labels, const dMatrix2d &
                     ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
 
-                    for (std::size_t i = 0; i < points.rows(); i++)
+                    for (Eigen::Index i = 0; i < points.rows(); i++)
                     {
-                        if (newtonPredictions(i, 0) > 0.5)
+                        if (newtonPredictions[i] > 0.5)
                         {
                             ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
                             ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
@@ -244,16 +258,11 @@ void showGUI(const dMatrix2d &points, const dMatrix2d &labels, const dMatrix2d &
 
 #pragma region Custom Functions
 
-dMatrix2d makeDegisnMatrix(const dMatrix2d& points)
+Eigen::MatrixX3d makeDegisnMatrix(const Eigen::MatrixX2d& points)
 {
-    // [1, y, x]
-    dMatrix2d designMatrix(points.rows(), 3, 1);
-
-    for (std::size_t i = 0; i < points.rows(); i++)
-    {
-        designMatrix(i, 2) = points(i, 0);
-        designMatrix(i, 1) = points(i, 1);
-    }
+    // [1, x, y]
+    Eigen::MatrixX3d designMatrix(points.rows(), 3);
+    designMatrix << Eigen::VectorXd::Ones(points.rows()), points;
     return designMatrix;
 }
 
@@ -274,105 +283,86 @@ std::string formatValueOutput(double value)
     return ss.str();
 }
 
-void printWeights(dMatrix2d &weights)
+void printWeights(const Eigen::Vector3d &weights)
 {
     std::cout << "w:" << std::endl;
-    for (auto value : weights)
-    {
-        std::cout << formatValueOutput(value) << std::endl;
-    }
+    std::cout << weights << std::endl;
+    // for (auto value : weights)
+    // {
+    //     std::cout << formatValueOutput(value) << std::endl;
+    // }
     std::cout << std::endl;
 }
 
-void printConfusionMatrix(int numberOfDataPoints, const dMatrix2d &labels, const dMatrix2d &predictions)
+void printConfusionMatrix(const Eigen::VectorXd &labels, const Eigen::VectorXd &predictions)
 {
-    int tpCount = 0;
-    int tnCount = 0;
-    int fpCount = 0;
-    int fnCount = 0;
+    const auto positiveGTMask = labels.array() == 1;
+    const auto positivePredMask = predictions.array() > 0.5;
 
-    for (std::size_t i = 0; i < labels.rows(); i++)
-    {
-        if (std::abs(labels(i, 0) - predictions(i, 0)) < 0.5)
-        {
-            if (labels(i, 0) == 1)
-            {
-                tpCount++;
-            }
-            else
-            {
-                tnCount++;
-            }
-        }
-        else
-        {
-            if (labels(i, 0) == 1)
-            {
-                fnCount++;
-            }
-            else
-            {
-                fpCount++;
-            }
-        }
-    }
+    auto tpCount = (positiveGTMask && positivePredMask).count();
+    auto fpCount = positivePredMask.count() - tpCount;
+    auto fnCount = positiveGTMask.count() - tpCount;
+    auto tnCount = (!positiveGTMask).count() - fpCount;
 
     std::cout << "Confusion Matrix:" << std::endl;
     std::cout << "\t\t\tPredict cluster 1\tPredict cluster 2" << std::endl;
-    std::cout << "Is cluster 1\t\t" << tpCount << "\t" << fnCount << std::endl;
-    std::cout << "Is cluster 1\t\t" << fpCount << "\t" << tnCount << std::endl;
+    std::cout << "Is cluster 1\t\t" << tpCount << "\t\t\t\t" << fnCount << std::endl;
+    std::cout << "Is cluster 1\t\t" << fpCount << "\t\t\t\t" << tnCount << std::endl;
 
     std::cout << std::endl;
 
-    std::cout << "Sensitivity (Successfully predict cluster 1): " << static_cast<double>(tpCount) / numberOfDataPoints << std::endl;
-    std::cout << "Specificity (Successfully predict cluster 2): " << static_cast<double>(tnCount) / numberOfDataPoints << std::endl;
+    std::cout << "Sensitivity (Successfully predict cluster 1): " << static_cast<long double>(tpCount) / positiveGTMask.count() << std::endl;
+    std::cout << "Specificity (Successfully predict cluster 2): " << static_cast<long double>(tnCount) / (!positiveGTMask).count() << std::endl;
 }
 
 auto generateDataPoints(DataGenerator &d1Generator, DataGenerator &d2Generator, int numberOfDataPoints)
 {
-    int size = numberOfDataPoints * 2;
-    dMatrix2d points(size, 2);
-    std::vector<double> labels(size, 0);
-    std::fill(labels.begin() + numberOfDataPoints, labels.end(), 1);
-
-    for (int i = 0; i < numberOfDataPoints; i++)
+    Eigen::MatrixX2d d1Points(numberOfDataPoints, 2);
+    for (auto row: d1Points.rowwise())
     {
-        auto [x1, y1] = d1Generator.generate();
-        points.row(i) = {x1, y1};
-        auto [x2, y2] = d2Generator.generate();
-        points.row(i + numberOfDataPoints) = {x2, y2};
+        row = d1Generator.generate();
     }
-    return std::make_pair(points, dMatrix2d(size, labels));
+
+    Eigen::MatrixX2d d2Points(numberOfDataPoints, 2);
+    for (auto row: d2Points.rowwise())
+    {
+        row = d2Generator.generate();
+    }
+
+    Eigen::MatrixX2d points(numberOfDataPoints * 2, 2);
+    points << d1Points, d2Points;
+
+    Eigen::VectorXd labels(numberOfDataPoints * 2);
+    labels << Eigen::VectorXd::Zero(numberOfDataPoints), Eigen::VectorXd::Ones(numberOfDataPoints);
+
+    return std::make_pair(points, labels);
 }
 
 void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerator &d1Generator, DataGenerator &d2Generator)
 {
-    std::random_device rd;
-    auto rng = std::mt19937_64(rd());
-
     // TODO: support concatenation and manipulate row/column with another matrix
     auto [dataPoints, labels] = generateDataPoints(d1Generator, d2Generator, numberOfDataPoints);
-    auto designMatrix = makeDegisnMatrix(dataPoints);
-    auto gradientWeights = algebra::zeros<double>(3, 1);
-    auto newtonWeights = gradientWeights;
+    Eigen::MatrixX3d designMatrix = makeDegisnMatrix(dataPoints);
+    Eigen::Vector3d gradientWeights = Eigen::Vector3d::Random();
+    Eigen::Vector3d newtonWeights = gradientWeights;
 
     int count = 0;
-    dMatrix2d dWeights;
+    Eigen::Vector3d dWeights;
     do
     {
         dWeights = gradientWeights;
 
         // sigmoid + linear regression = logistic regression
-        auto y = 1 / (1 + (-1 * designMatrix.mm(gradientWeights)).exp());
+        Eigen::VectorXd y = ((-1 * designMatrix * gradientWeights).array().exp() + 1).inverse().matrix();
 
-        auto jacobianMatrix = designMatrix.transpose().mm(y - labels);
+        Eigen::Vector3d jacobianMatrix = designMatrix.transpose() * (y - labels);
 
         // Steepest gradient descent
         gradientWeights -= learningRate * jacobianMatrix;
 
         dWeights -= gradientWeights;
         count++;
-    } while (dWeights.abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
+    } while (dWeights.array().abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
 
     count = 0;
     do
@@ -380,31 +370,31 @@ void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerat
         dWeights = newtonWeights;
 
         // sigmoid + linear regression = logistic regression
-        auto y = 1 / (1 + (-1 * designMatrix.mm(newtonWeights)).exp());
+        Eigen::VectorXd y = ((-1 * designMatrix * newtonWeights).array().exp() + 1).inverse().matrix();
 
-        auto jacobianMatrix = designMatrix.transpose().mm(y - labels);
+        Eigen::Vector3d jacobianMatrix = designMatrix.transpose() * (y - labels);
 
-        y *= (1 - y);
-        y = algebra::diagonal<double>(y.array());
-        auto hessianMatrix = designMatrix.transpose().mm(y.mm(designMatrix));
+        y = y.array() * (1 - y.array());
+
+        Eigen::DiagonalMatrix<double, Eigen::Dynamic> D(y);
+        Eigen::Matrix3d hessianMatrix = designMatrix.transpose() * D * designMatrix;
 
         // Newton's method
-        try
+        if (const Eigen::FullPivLU<Eigen::Matrix3d> &fullPivLu = hessianMatrix.fullPivLu(); fullPivLu.isInvertible())
         {
-            newtonWeights -= hessianMatrix.inverse().mm(jacobianMatrix);
+            newtonWeights -= hessianMatrix.inverse() * jacobianMatrix;
         }
-        catch(const std::runtime_error& e)
+        else
         {
-            std::cerr << "Error: " << e.what() << std::endl;
             newtonWeights -= learningRate * jacobianMatrix;
         }
 
         dWeights -= newtonWeights;
         count++;
-    } while (dWeights.abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
+    } while (dWeights.array().abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
 
-    auto gradientPredictions = 1 / (1 + (-1 * designMatrix.mm(gradientWeights)).exp());
-    auto newtonPredictions = 1 / (1 + (-1 * designMatrix.mm(newtonWeights)).exp());
+    Eigen::VectorXd gradientPredictions = ((-1 * designMatrix * gradientWeights).array().exp() + 1).inverse().matrix();
+    Eigen::VectorXd newtonPredictions = ((-1 * designMatrix * newtonWeights).array().exp() + 1).inverse().matrix();
 
     std::cout << "Gradient descent" << std::endl << std::endl;
 
@@ -412,16 +402,16 @@ void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerat
 
     std::cout << std::endl;
 
-    printConfusionMatrix(numberOfDataPoints, labels, gradientPredictions);
+    printConfusionMatrix(labels, gradientPredictions);
 
-    std::cout << std::endl << "------------------------------------------------------------";
+    std::cout << std::endl << "------------------------------------------------------------" << std::endl;
     std::cout << "Newton's method" << std::endl << std::endl;
 
     printWeights(newtonWeights);
 
     std::cout << std::endl;
 
-    printConfusionMatrix(numberOfDataPoints, labels, newtonPredictions);
+    printConfusionMatrix(labels, newtonPredictions);
 
     showGUI(dataPoints, labels, gradientPredictions, newtonPredictions);
 }

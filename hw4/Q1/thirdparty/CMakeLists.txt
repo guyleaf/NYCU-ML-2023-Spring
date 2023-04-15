@@ -8,4 +8,6 @@ add_library(thirdparty INTERFACE)
 add_subdirectory(imgui)
 add_subdirectory(implot)
 
-target_link_libraries(thirdparty INTERFACE imgui implot)
+find_package(Eigen3 3.4 REQUIRED NO_MODULE)
+
+target_link_libraries(thirdparty INTERFACE imgui implot Eigen3::Eigen)

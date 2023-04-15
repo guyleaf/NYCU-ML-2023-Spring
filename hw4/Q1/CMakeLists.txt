@@ -32,7 +32,6 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-add_subdirectory(libs)
 add_subdirectory(thirdparty)
 
 # Main executable code
@@ -42,4 +41,4 @@ target_compile_features(mlhw4_q1 PRIVATE cxx_std_14)
 
 target_include_directories(mlhw4_q1 PRIVATE "${CMAKE_SOURCE_DIR}/include")
 
-target_link_libraries(mlhw4_q1 PRIVATE libs thirdparty)
+target_link_libraries(mlhw4_q1 PRIVATE thirdparty)
