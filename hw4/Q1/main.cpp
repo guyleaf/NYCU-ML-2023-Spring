@@ -385,7 +385,8 @@ void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerat
         auto jacobianMatrix = designMatrix.transpose().mm(y - labels);
 
         y *= (1 - y);
-        auto hessianMatrix = designMatrix.transpose().mm(algebra::diagonal<double>(y.array()).mm(designMatrix));
+        y = algebra::diagonal<double>(y.array());
+        auto hessianMatrix = designMatrix.transpose().mm(y.mm(designMatrix));
 
         // Newton's method
         try
@@ -399,6 +400,7 @@ void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerat
         }
 
         dWeights -= newtonWeights;
+        count++;
     } while (dWeights.abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
 
     auto gradientPredictions = 1 / (1 + (-1 * designMatrix.mm(gradientWeights)).exp());

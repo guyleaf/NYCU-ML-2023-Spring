@@ -128,8 +128,9 @@ namespace algebra
     template <typename T>                                                                                \
     inline Matrix2d<T> operator _Op(const typename Matrix2d<T>::value_type &lhs, const Matrix2d<T> &rhs) \
     {                                                                                                    \
-        Matrix2d<T> result(rhs);                                                                         \
-        result _Op## = lhs;                                                                              \
+        /* broadcast scalars to matrix */                                                                \
+        Matrix2d<T> result(rhs.rows(), rhs.cols(), lhs);                                                 \
+        result _Op## = rhs;                                                                              \
         return result;                                                                                   \
     }                                                                                                    \
                                                                                                          \
