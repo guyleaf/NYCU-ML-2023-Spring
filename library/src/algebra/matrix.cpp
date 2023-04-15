@@ -7,6 +7,10 @@
 #include <cmath>
 #include <stdexcept>
 
+#include <Eigen/Core>
+#include <Eigen/LU>
+#include <vector>
+
 namespace algebra
 {
     const std::string NOT_DIVISIBLE_SIZE_MSG = "The size of array is not divisible by rows.";
@@ -154,70 +158,18 @@ namespace algebra
             throw std::runtime_error(NOT_SQUARE_MSG);
         }
 
-        std::size_t n = this->_rows;
-        Matrix2d<T> b = eye<T>(n);
-        Matrix2d<T> l = eye<T>(n);
-        Matrix2d<T> u = Matrix2d<T>(*this);
+        using MatrixXd = Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic>;
 
-        for (int i = 0; i < n; i++)
+        Eigen::Map<MatrixXd> ref(std::vector<T>(std::begin(this->_data), std::end(this->_data)).data(), this->_rows, this->_cols);
+        const Eigen::FullPivLU<MatrixXd> &lu = ref.fullPivLu();
+
+        if (!lu.isInvertible())
         {
-            // Upper Triangular
-            for (int k = i; k < n; k++)
-            {
-                // Summation of L(i, j) * U(j, k)
-                double sum = 0;
-                for (int j = 0; j < i; j++)
-                    sum += (l(i, j) * u(j, k));
-
-                // Evaluating U(i, k)
-                u(i, k) = (*this)(i, k) - sum;
-            }
-
-            // Lower Triangular
-            for (int k = i + 1; k < n; k++)
-            {
-                // Summation of L(k, j) * U(j, i)
-                double sum = 0;
-                for (int j = 0; j < i; j++)
-                    sum += (l(k, j) * u(j, i));
-
-                // Evaluating L(k, i)
-                l(k, i) = ((*this)(k, i) - sum) / u(i, i);
-            }
+            throw std::runtime_error(NOT_INVERTIBLE_MSG);
         }
 
-        for (std::size_t i = 0; i < n; i++)
-        {
-            if (l(i, i) * u(i, i) == 0)
-            {
-                throw std::runtime_error(NOT_INVERTIBLE_MSG);
-            }
-        }
-
-        // LUx = b
-        // Ly = b
-        for (std::size_t i = 0; i < n; i++)
-        {
-            std::valarray<T> bRow = b.row(i);
-            for (std::size_t j = i + 1; j < n; j++)
-            {
-                b.row(j) -= l(j, i) * bRow;
-            }
-        }
-
-        // Ux = y
-        for (std::size_t i = n; i > 0; i--)
-        {
-            auto realI = i - 1;
-            b.row(realI) *= std::valarray<T>(1 / u(realI, realI), n);
-            std::valarray<T> bRow = b.row(realI);
-            for (std::size_t j = i - 1; j > 0; j--)
-            {
-                auto realJ = j - 1;
-                b.row(realJ) -= u(realJ, realI) * bRow;
-            }
-        }
-        return b;
+        MatrixXd inversed_m = lu.inverse();
+        return Matrix2d<T>(lu.rows(), lu.cols(), std::valarray<T>(inversed_m.data(), lu.rows() * lu.cols()));
     }
 
     template <typename T>

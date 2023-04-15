@@ -28,7 +28,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["0.001", "50", "1", "2", "1", "2", "10", "2", "10", "2", ">", "output.log"],
+            "args": ["0.0001", "50", "1", "2", "1", "2", "10", "2", "10", "2", ">", "output.log"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [

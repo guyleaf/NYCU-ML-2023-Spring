@@ -353,7 +353,7 @@ void modelDataGenerator(double learningRate, int numberOfDataPoints, DataGenerat
     // TODO: support concatenation and manipulate row/column with another matrix
     auto [dataPoints, labels] = generateDataPoints(d1Generator, d2Generator, numberOfDataPoints);
     auto designMatrix = makeDegisnMatrix(dataPoints);
-    auto gradientWeights = algebra::randn<double>(3, 1, rng);
+    auto gradientWeights = algebra::zeros<double>(3, 1);
     auto newtonWeights = gradientWeights;
 
     int count = 0;
