@@ -83,8 +83,9 @@
         "unordered_set": "cpp",
         "cinttypes": "cpp",
         "iomanip": "cpp",
-        "core": "cpp"
+        "core": "cpp",
+        "fstream": "cpp",
+        "list": "cpp"
     },
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
-    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }
