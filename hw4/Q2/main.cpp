@@ -36,38 +36,13 @@ constexpr ImVec4 COLOR_BLUE = ImVec4(0, 0, 1, 1);
 
 #pragma region Data Structures
 
-struct GaussianParameter
-{
-    double mean;
-    double variance;
-};
-
-class DataGenerator
+class RandomGenerator
 {
 public:
-    DataGenerator(const GaussianParameter &parameterForX, const GaussianParameter &parameterForY) : parameterForX(parameterForX), parameterForY(parameterForY)
+    RandomGenerator()
     {
         std::random_device rd;
         this->rng = std::mt19937_64(rd());
-    }
-
-    Eigen::Vector2d generate()
-    {
-        auto x = this->generate_from_normal_distribution(this->parameterForX.mean, this->parameterForX.variance);
-        auto y = this->generate_from_normal_distribution(this->parameterForY.mean, this->parameterForY.variance);
-        return Eigen::Vector2d(x, y);
-    }
-
-private:
-    std::mt19937_64 rng;
-
-    GaussianParameter parameterForX;
-    GaussianParameter parameterForY;
-
-    double generate_from_normal_distribution(double m, double var)
-    {
-        Eigen::MatrixXd samples = this->randu(12, 1, 0.0, 1.0);
-        return m + std::sqrt(var) * (samples.sum() - 6);
     }
 
     Eigen::MatrixXd randu(std::size_t n, std::size_t m, double a, double b)
@@ -77,6 +52,9 @@ private:
         { return uniform_dist(rng); };
         return Eigen::MatrixXd::NullaryExpr(n, m, uniform);
     }
+
+private:
+    std::mt19937_64 rng;
 };
 
 // for MNIST images
@@ -86,8 +64,10 @@ constexpr int LABEL_DATA_ID = 2049;
 using MatrixX10d = Eigen::Matrix<double, Eigen::Dynamic, 10>;
 using Matrix10Xd = Eigen::Matrix<double, 10, Eigen::Dynamic>;
 using MatrixXb = Eigen::Matrix<std::byte, Eigen::Dynamic, Eigen::Dynamic>;
+
 using Vector10d = Eigen::Vector<double, 10>;
 using VectorXb = Eigen::VectorX<std::byte>;
+
 using STLArray4b = std::array<std::byte, 4>;
 
 struct ImageSize
@@ -376,9 +356,52 @@ std::pair<Eigen::MatrixXi, Eigen::MatrixXi> preprocess(const FileBody &imagesFil
     return std::make_pair((images.array() >= 128).cast<int>().matrix(), labels);
 }
 
-void modelMNIST(const Eigen::MatrixXi &images, const Eigen::MatrixXi &labels, const ImageSize &imageSize)
+MatrixX10d runEStep(const Eigen::MatrixXi &images, const Eigen::Ref<Vector10d> &lambda, const Eigen::Ref<Matrix10Xd> &theta)
+{
+    auto n = images.rows();
+    auto groups = theta.rows();
+
+    Vector10d tmp;
+    MatrixX10d weights(n, 10);
+    for (Eigen::Index i = 0; i < n; i++)
+    {
+        auto image = images.row(i).array();
+
+        for (Eigen::Index j = 0; j < groups; j++)
+        {
+            auto row = theta.row(j).array();
+            tmp[j] = (row.pow(image).array() * (1 - row).pow(1 - image).array()).prod(); 
+        }
+
+        weights.row(i) = tmp.array() / tmp.sum();
+    }
+
+    return weights;
+}
+
+void runMStep(const Eigen::Ref<MatrixX10d> &weights, Eigen::Ref<Vector10d> lambda, Eigen::Ref<Matrix10Xd> theta)
 {
     
+}
+
+void modelMNIST(const Eigen::MatrixXi &images, const Eigen::MatrixXi &labels, const ImageSize &imageSize)
+{
+    // i: data
+    // j: groups
+    // k: pixels
+
+    Vector10d lambda = Vector10d::Ones().normalized();
+    RandomGenerator generator;
+    Matrix10Xd theta = generator.randu(10, imageSize.size(), 0.25, 0.75).normalized();
+
+    int count = 0;
+    MatrixX10d dWeights = MatrixX10d::Zero(images.rows(), 10);
+    do
+    {
+        MatrixX10d weights = runEStep(images, lambda, theta);
+        runMStep(weights, lambda, theta);
+
+    } while (dWeights.array().abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
 }
 
 #pragma endregion
