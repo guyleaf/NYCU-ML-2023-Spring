@@ -4,7 +4,7 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 # Eigen options
-set(CMAKE_C_FLAGS -fopenmp)
+set(CMAKE_CXX_FLAGS "-fopenmp -march=native")
 
 # MKL options
 set(MKL_INTERFACE "lp64")

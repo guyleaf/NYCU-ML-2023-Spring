@@ -87,5 +87,15 @@
         "fstream": "cpp",
         "list": "cpp"
     },
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "logViewer.watch": [
+        {
+            "title": "HW4 Debug",
+            "pattern": "~/git/NYCU-ML-2023-Spring/hw4/Q2/build/output.log"
+        },
+        {
+            "title": "HW4 Task",
+            "pattern": "~/git/NYCU-ML-2023-Spring/hw4/Q2/build/output_task.log"
+        }
+    ]
 }

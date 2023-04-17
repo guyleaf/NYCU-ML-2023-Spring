@@ -4,6 +4,7 @@
     // 如需詳細資訊，請瀏覽: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        
         {
             "name": "(lldb) Launch",
             "type": "cppdbg",
@@ -37,7 +38,11 @@
                     // it gets resolved by CMake Tools:
                     "name": "PATH",
                     "value": "${env:PATH}:${command:cmake.getLaunchTargetDirectory}"
-                  }
+                },
+                {
+                    "name": "OMP_NUM_THREADS",
+                    "value": "8"
+                }
             ],
             "externalConsole": false,
             "MIMode": "gdb",

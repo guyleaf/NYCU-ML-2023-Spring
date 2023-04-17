@@ -5,36 +5,39 @@
 #include <vector>
 #include <variant>
 #include <iterator>
+#include <limits>
 
-#include <imgui.h>
-#include <implot.h>
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_opengl3.h>
-
-#include <GLFW/glfw3.h> // Will drag system OpenGL headers
-
+#define NUM_THREADS 12
 #define EIGEN_USE_MKL_ALL
 
 #include <Eigen/Core>
-#include <Eigen/LU>
+#include <Eigen/Dense>
 
 #include <boost/filesystem.hpp>
+#include <omp.h>
 
 namespace fs = boost::filesystem;
 
-const char TITLE[] = "ML HW4";
 const std::string TRAIN_IMAGES_FILE = "train-images.idx3-ubyte";
 const std::string TRAIN_LABELS_FILE = "train-labels.idx1-ubyte";
 
-constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-5;
-
-constexpr ImVec2 DATA_RANGES = ImVec2(-4.5, 14.5);
-
-constexpr ImVec4 COLOR_BLACK = ImVec4(0, 0, 0, 1);
-constexpr ImVec4 COLOR_RED = ImVec4(1, 0, 0, 1);
-constexpr ImVec4 COLOR_BLUE = ImVec4(0, 0, 1, 1);
+constexpr double STOP_APPROXIMATION_THRESHOLD = 5e-5;
 
 #pragma region Data Structures
+
+// for MNIST images
+constexpr int IMAGE_DATA_ID = 2051;
+constexpr int LABEL_DATA_ID = 2049;
+
+using MatrixX10d = Eigen::Matrix<double, Eigen::Dynamic, 10>;
+using Matrix10Xd = Eigen::Matrix<double, 10, Eigen::Dynamic>;
+using MatrixXb = Eigen::Matrix<std::byte, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+
+using Vector10d = Eigen::Vector<double, 10>;
+using Vector10i = Eigen::Vector<int, 10>;
+using VectorXb = Eigen::VectorX<std::byte>;
+
+using STLArray4b = std::array<std::byte, 4>;
 
 class RandomGenerator
 {
@@ -56,19 +59,6 @@ public:
 private:
     std::mt19937_64 rng;
 };
-
-// for MNIST images
-constexpr int IMAGE_DATA_ID = 2051;
-constexpr int LABEL_DATA_ID = 2049;
-
-using MatrixX10d = Eigen::Matrix<double, Eigen::Dynamic, 10>;
-using Matrix10Xd = Eigen::Matrix<double, 10, Eigen::Dynamic>;
-using MatrixXb = Eigen::Matrix<std::byte, Eigen::Dynamic, Eigen::Dynamic>;
-
-using Vector10d = Eigen::Vector<double, 10>;
-using VectorXb = Eigen::VectorX<std::byte>;
-
-using STLArray4b = std::array<std::byte, 4>;
 
 struct ImageSize
 {
@@ -124,7 +114,7 @@ FileBody parseMNISTFile(const fs::path &path)
     STLArray4b bytes;
     auto sizeOfFrame = bytes.size();
 
-    ifs.read(std::bit_cast<char *>(std::bit_cast<char *>(bytes.data())), sizeOfFrame);
+    ifs.read(std::bit_cast<char *>(bytes.data()), sizeOfFrame);
     int magicNumber = castToInt(bytes, true);
 
     ifs.read(std::bit_cast<char *>(bytes.data()), sizeOfFrame);
@@ -150,8 +140,6 @@ FileBody parseMNISTFile(const fs::path &path)
 
     ifs.close();
 
-    std::cout << buffer.size() << std::endl;
-
     if (magicNumber == IMAGE_DATA_ID)
     {
         // TODO: std::vector will be freed when returned
@@ -169,239 +157,203 @@ FileBody parseMNISTFile(const fs::path &path)
 
 #pragma endregion
 
-#pragma region GUI Functions
-
-static void glfwErrorCallback(int error, const char *description)
-{
-    std::cerr << "GLFW Error " << error << ": " << description << std::endl;
-}
-
-GLFWwindow *setUpGUI()
-{
-    glfwSetErrorCallback(glfwErrorCallback);
-    if (!glfwInit())
-    {
-        return nullptr;
-    }
-
-    // Decide GL+GLSL versions
-    // GL 3.3 + GLSL 330
-    const char *glsl_version = "#version 330";
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); // 3.2+ only
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);           // 3.0+ only
-
-    // Create window with graphics context
-    GLFWwindow *window = glfwCreateWindow(1280, 720, TITLE, nullptr, nullptr);
-    if (window == nullptr)
-        return nullptr;
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(0);
-
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImPlot::CreateContext();
-
-    ImGuiIO &io = ImGui::GetIO();
-
-    ImFontConfig cfg;
-    cfg.SizePixels = 15;
-    io.Fonts->AddFontDefault(&cfg);
-
-    // Setup Dear ImGui style
-    ImGui::StyleColorsLight();
-    // ImGui::StyleColorsDark();
-
-    // Setup Platform/Renderer backends
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(glsl_version);
-
-    return window;
-}
-
-void showGUI(const Eigen::MatrixX2d &points, const Eigen::VectorXd &labels, const Eigen::VectorXd &gradientPredictions, const Eigen::VectorXd &newtonPredictions)
-{
-    auto window = setUpGUI();
-    if (window == nullptr)
-    {
-        throw std::runtime_error("Cannot create window.");
-    }
-
-    // Our state
-    auto clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
-    // Main loop
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-
-        // Start the Dear ImGui frame
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        {
-            const auto windowSize = ImGui::GetIO().DisplaySize;
-
-            ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(windowSize.x, windowSize.y), ImGuiCond_Always);
-            ImGui::Begin("Result", nullptr, ImGuiWindowFlags_NoDecoration);
-
-            if (ImPlot::BeginSubplots("Result", 1, 3, ImVec2(windowSize.x, windowSize.y)))
-            {
-                if (ImPlot::BeginPlot("Ground truth"))
-                {
-                    ImPlot::SetupAxes("x", "y");
-                    ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
-
-                    for (Eigen::Index i = 0; i < points.rows(); i++)
-                    {
-                        if (labels[i] == 1)
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
-                            ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
-                        }
-                        else
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_RED, IMPLOT_AUTO, COLOR_RED);
-                            ImPlot::PlotScatter("0", &points(i, 0), &points(i, 1), 1);
-                        }
-                    }
-                    ImPlot::EndPlot();
-                }
-
-                if (ImPlot::BeginPlot("Gradient descent"))
-                {
-                    ImPlot::SetupAxes("x", "y");
-                    ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
-
-                    for (Eigen::Index i = 0; i < points.rows(); i++)
-                    {
-                        if (gradientPredictions[i] > 0.5)
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
-                            ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
-                        }
-                        else
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_RED, IMPLOT_AUTO, COLOR_RED);
-                            ImPlot::PlotScatter("0", &points(i, 0), &points(i, 1), 1);
-                        }
-                    }
-                    ImPlot::EndPlot();
-                }
-
-                if (ImPlot::BeginPlot("Newton's method"))
-                {
-                    ImPlot::SetupAxes("x", "y");
-                    ImPlot::SetupAxisLimits(ImAxis_X1, DATA_RANGES.x, DATA_RANGES.y);
-                    ImPlot::SetupAxisLimits(ImAxis_Y1, -3, 14);
-
-                    for (Eigen::Index i = 0; i < points.rows(); i++)
-                    {
-                        if (newtonPredictions[i] > 0.5)
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
-                            ImPlot::PlotScatter("1", &points(i, 0), &points(i, 1), 1);
-                        }
-                        else
-                        {
-                            ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_RED, IMPLOT_AUTO, COLOR_RED);
-                            ImPlot::PlotScatter("0", &points(i, 0), &points(i, 1), 1);
-                        }
-                    }
-                    ImPlot::EndPlot();
-                }
-                ImPlot::EndSubplots();
-            }
-
-            ImGui::End();
-        }
-
-        // Rendering
-        ImGui::Render();
-        int display_w, display_h;
-        glfwGetFramebufferSize(window, &display_w, &display_h);
-        glViewport(0, 0, display_w, display_h);
-        glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-        glClear(GL_COLOR_BUFFER_BIT);
-        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-        glfwSwapBuffers(window);
-    }
-
-    // Cleanup
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImPlot::DestroyContext();
-    ImGui::DestroyContext();
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
-}
-
-#pragma endregion
-
 #pragma region Custom Functions
 
-std::pair<Eigen::MatrixXi, Eigen::MatrixXi> preprocess(const FileBody &imagesFile, const FileBody &labelsFile)
+std::pair<Eigen::MatrixXi, Eigen::VectorXi> preprocess(const FileBody &imagesFile, const FileBody &labelsFile)
 {
     Eigen::MatrixXi images = std::get<MatrixXb>(imagesFile.content).cast<int>();
     Eigen::VectorXi labels = std::get<VectorXb>(labelsFile.content).cast<int>();
     return std::make_pair((images.array() >= 128).cast<int>().matrix(), labels);
 }
 
-MatrixX10d runEStep(const Eigen::MatrixXi &images, const Eigen::Ref<Vector10d> &lambda, const Eigen::Ref<Matrix10Xd> &theta)
+void runEStep(const Eigen::MatrixXi &images, Eigen::Ref<MatrixX10d> responsibilities, const Eigen::Ref<Vector10d> &lambda, const Eigen::Ref<Matrix10Xd> &theta)
 {
     auto n = images.rows();
     auto groups = theta.rows();
 
-    Vector10d tmp;
-    MatrixX10d weights(n, 10);
+#pragma omp parallel for num_threads(NUM_THREADS)
     for (Eigen::Index i = 0; i < n; i++)
     {
-        auto image = images.row(i).array();
+        auto image = images.row(i).array().cast<double>();
 
+        Vector10d tmp;
+#pragma unroll
         for (Eigen::Index j = 0; j < groups; j++)
         {
             auto row = theta.row(j).array();
-            tmp[j] = (row.pow(image).array() * (1 - row).pow(1 - image).array()).prod(); 
+            tmp[j] = (row.pow(image) * (1 - row).pow(1 - image)).prod();
         }
 
-        weights.row(i) = tmp.array() / tmp.sum();
+        // lambda_j * P(x_n | theta_j)
+        tmp.array() *= lambda.array();
+
+        auto dominator = tmp.sum();
+        if (dominator == 0)
+        {
+            continue;
+        }
+
+        responsibilities.row(i) = tmp.array() / dominator;
+    }
+}
+
+void runMStep(const Eigen::MatrixXi &images, const Eigen::Ref<MatrixX10d> &responsibilities, Eigen::Ref<Vector10d> lambda, Eigen::Ref<Matrix10Xd> theta)
+{
+    Vector10d totalResponsibilitiesPerGroup = responsibilities.colwise().sum().transpose();
+    lambda = (totalResponsibilitiesPerGroup.array() / responsibilities.rows()).matrix();
+    theta = totalResponsibilitiesPerGroup.array().max(1).inverse().matrix().asDiagonal() * (responsibilities.transpose() * images.cast<double>());
+}
+
+void printClasses(const ImageSize &imageSize, const Eigen::Ref<Matrix10Xd> &theta)
+{
+    int count = 0;
+    for (auto group : theta.rowwise())
+    {
+        std::cout << "class " << count << ":" << std::endl;
+
+        std::cout << (group.array() > 0.5).cast<bool>().reshaped<Eigen::RowMajor>(imageSize.height, imageSize.width) << std::endl
+                  << std::endl;
+
+        count++;
+    }
+}
+
+void printLabels(const ImageSize &imageSize, const Eigen::Ref<Vector10i> &mapper, const Eigen::Ref<Matrix10Xd> &theta)
+{
+    // mapper: label => class
+
+    int count = 0;
+    for (auto classIndex : mapper)
+    {
+        std::cout << "labeled class " << count << ":" << std::endl;
+
+        std::cout << (theta.row(classIndex).array() > 0.5).cast<bool>().reshaped<Eigen::RowMajor>(imageSize.height, imageSize.width) << std::endl
+                  << std::endl;
+
+        count++;
+    }
+}
+
+Eigen::Index printConfusionMatrix(const Eigen::Ref<Eigen::VectorXi> &predictions, const Eigen::VectorXi &labels)
+{
+    Eigen::Index totalTPCount = 0;
+    for (int i = 0; i < 10; i++)
+    {
+        const auto positiveGTMask = labels.array() == i;
+        const auto positivePredictionMask = predictions.array() == i;
+
+        auto tpCount = (positivePredictionMask && positiveGTMask).count();
+        auto fpCount = positivePredictionMask.count() - tpCount;
+        auto fnCount = positiveGTMask.count() - tpCount;
+        auto tnCount = (!positiveGTMask).count() - fpCount;
+
+        std::cout << "Confusion Matrix " << i << ":" << std::endl;
+        std::cout << "\t\t\t\tPredict number " << i << "\tPredict not number " << i << std::endl;
+        std::cout << "Is number " << i << "\t\t\t\t" << tpCount << "\t\t\t\t" << fnCount << std::endl;
+        std::cout << "Isn't number " << i << "\t\t\t" << fpCount << "\t\t\t\t" << tnCount << std::endl;
+
+        std::cout << std::endl;
+
+        std::cout << "Sensitivity (Successfully predict number 1): " << static_cast<long double>(tpCount) / positiveGTMask.count() << std::endl;
+        std::cout << "Specificity (Successfully predict not number 1): " << static_cast<long double>(tnCount) / (!positiveGTMask).count() << std::endl;
+
+        if (i != 9)
+        {
+            std::cout << std::endl
+                      << "-----------------------------------------------------------------------" << std::endl
+                      << std::endl;
+        }
+
+        totalTPCount += tpCount;
     }
 
-    return weights;
+    std::cout << std::endl;
+    return totalTPCount;
 }
 
-void runMStep(const Eigen::Ref<MatrixX10d> &weights, Eigen::Ref<Vector10d> lambda, Eigen::Ref<Matrix10Xd> theta)
+Vector10i assignLabels(Eigen::Ref<Eigen::VectorXi> predictions, const Eigen::VectorXi &labels)
 {
-    
+    Vector10i mapper;
+    // [labels, classes]
+    Eigen::Matrix<Eigen::Index, 10, 10> table = Eigen::Matrix<Eigen::Index, 10, 10>::Zero();
+
+#pragma omp parallel for num_threads(NUM_THREADS)
+    for (Eigen::Index i = 0; i < labels.rows(); i++)
+    {
+        table(labels[i], predictions[i]) += 1;
+    }
+
+    int labelId;
+    int classId;
+    Eigen::VectorXi tmp = predictions;
+    for (int i = 0; i < 10; i++)
+    {
+        table.maxCoeff(&labelId, &classId);
+
+        // avoid assigning the same label twice
+        table.row(labelId).fill(-1);
+        table.col(classId).fill(-1);
+
+        // label => class
+        mapper[labelId] = classId;
+
+        tmp = (predictions.array() == classId).select(labelId, tmp);
+    }
+    predictions.swap(tmp);
+
+    return mapper;
 }
 
-void modelMNIST(const Eigen::MatrixXi &images, const Eigen::MatrixXi &labels, const ImageSize &imageSize)
+void modelMNIST(const Eigen::MatrixXi &images, const Eigen::VectorXi &labels, const ImageSize &imageSize)
 {
     // i: data
     // j: groups
     // k: pixels
 
-    Vector10d lambda = Vector10d::Ones().normalized();
+    Vector10d lambda = Vector10d::Constant(0.1);
     RandomGenerator generator;
-    Matrix10Xd theta = generator.randu(10, imageSize.size(), 0.25, 0.75).normalized();
+    Matrix10Xd theta = generator.randu(10, imageSize.size(), 0.25, 0.75);
+    theta = theta.rowwise().sum().cwiseInverse().asDiagonal() * theta;
 
     int count = 0;
-    MatrixX10d dWeights = MatrixX10d::Zero(images.rows(), 10);
+    MatrixX10d responsibilities = MatrixX10d::Zero(images.rows(), 10);
+    Matrix10Xd delta;
     do
     {
-        MatrixX10d weights = runEStep(images, lambda, theta);
-        runMStep(weights, lambda, theta);
+        runEStep(images, responsibilities, lambda, theta);
 
-    } while (dWeights.array().abs().mean() > STOP_APPROXIMATION_THRESHOLD && count < 10000);
+        Matrix10Xd dtheta = theta;
+        runMStep(images, responsibilities, lambda, theta);
+        delta = (dtheta - theta).cwiseAbs();
+
+        printClasses(imageSize, theta);
+
+        auto oldPrecision = std::cout.precision();
+        std::cout.precision(std::numeric_limits<double>::max_digits10);
+        std::cout << "No. of Iteration: " << count << ", Difference: " << delta.sum() << ", Mean: " << delta.mean() << std::endl
+                  << std::endl;
+        std::cout.precision(oldPrecision);
+        count++;
+    } while (delta.mean() >= STOP_APPROXIMATION_THRESHOLD && count < 200);
+
+    std::cout << "-----------------------------------------------------------------------" << std::endl;
+    std::cout << "-----------------------------------------------------------------------" << std::endl
+              << std::endl;
+
+    Eigen::VectorXi predictions(images.rows());
+#pragma omp parallel for num_threads(NUM_THREADS)
+    for (Eigen::Index i = 0; i < responsibilities.rows(); i++)
+    {
+        responsibilities.row(i).maxCoeff(&predictions[i]);
+    }
+
+    Vector10i mapper = assignLabels(predictions, labels);
+
+    printLabels(imageSize, mapper, theta);
+    auto totalCorrects = printConfusionMatrix(predictions, labels);
+
+    std::cout << "Total iteration to converge: " << count << std::endl;
+    std::cout << "Total error rate: " << static_cast<long double>(totalCorrects) / images.rows() << std::endl;
 }
 
 #pragma endregion
@@ -413,6 +365,9 @@ int main(int argc, char *argv[])
         std::cerr << "Usage: " << argv[0] << " <data path>" << std::endl;
         return 1;
     }
+
+    omp_set_num_threads(NUM_THREADS);
+    std::cout << "Running in " << Eigen::nbThreads() << " threads" << std::endl;
 
     argv++;
 
@@ -428,7 +383,6 @@ int main(int argc, char *argv[])
     auto trainLabels = parseMNISTFile(path / TRAIN_LABELS_FILE);
 
     auto [images, labels] = preprocess(trainImages, trainLabels);
-
     modelMNIST(images, labels, trainImages.imageSize);
     return 0;
 }
