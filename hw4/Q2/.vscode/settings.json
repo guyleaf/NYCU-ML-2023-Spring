@@ -85,7 +85,10 @@
         "iomanip": "cpp",
         "core": "cpp",
         "fstream": "cpp",
-        "list": "cpp"
+        "list": "cpp",
+        "regex": "cpp",
+        "shared_mutex": "cpp",
+        "cfenv": "cpp"
     },
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
     "logViewer.watch": [

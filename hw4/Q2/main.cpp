@@ -21,7 +21,7 @@ namespace fs = boost::filesystem;
 const std::string TRAIN_IMAGES_FILE = "train-images.idx3-ubyte";
 const std::string TRAIN_LABELS_FILE = "train-labels.idx1-ubyte";
 
-constexpr double STOP_APPROXIMATION_THRESHOLD = 5e-5;
+constexpr double STOP_APPROXIMATION_THRESHOLD = 1e-7;
 
 #pragma region Data Structures
 
@@ -45,7 +45,8 @@ public:
     RandomGenerator()
     {
         std::random_device rd;
-        this->rng = std::mt19937_64(rd());
+        std::seed_seq seed{rd()};
+        this->rng = std::mt19937_64(seed);
     }
 
     Eigen::MatrixXd randu(std::size_t n, std::size_t m, double a, double b)
@@ -317,24 +318,25 @@ void modelMNIST(const Eigen::MatrixXi &images, const Eigen::VectorXi &labels, co
 
     int count = 0;
     MatrixX10d responsibilities = MatrixX10d::Zero(images.rows(), 10);
-    Matrix10Xd delta;
+    MatrixX10d delta;
     do
     {
+        Matrix10Xd dresponsibilities = responsibilities;
         runEStep(images, responsibilities, lambda, theta);
+        delta = (dresponsibilities - responsibilities).cwiseAbs();
 
-        Matrix10Xd dtheta = theta;
         runMStep(images, responsibilities, lambda, theta);
-        delta = (dtheta - theta).cwiseAbs();
 
         printClasses(imageSize, theta);
+
+        count++;
 
         auto oldPrecision = std::cout.precision();
         std::cout.precision(std::numeric_limits<double>::max_digits10);
         std::cout << "No. of Iteration: " << count << ", Difference: " << delta.sum() << ", Mean: " << delta.mean() << std::endl
                   << std::endl;
         std::cout.precision(oldPrecision);
-        count++;
-    } while (delta.mean() >= STOP_APPROXIMATION_THRESHOLD && count < 200);
+    } while (delta.mean() >= STOP_APPROXIMATION_THRESHOLD && count < 500);
 
     std::cout << "-----------------------------------------------------------------------" << std::endl;
     std::cout << "-----------------------------------------------------------------------" << std::endl
@@ -353,7 +355,7 @@ void modelMNIST(const Eigen::MatrixXi &images, const Eigen::VectorXi &labels, co
     auto totalCorrects = printConfusionMatrix(predictions, labels);
 
     std::cout << "Total iteration to converge: " << count << std::endl;
-    std::cout << "Total error rate: " << static_cast<long double>(totalCorrects) / images.rows() << std::endl;
+    std::cout << "Total error rate: " << static_cast<long double>(images.rows() - totalCorrects) / images.rows() << std::endl;
 }
 
 #pragma endregion

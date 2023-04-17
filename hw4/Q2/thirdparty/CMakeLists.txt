@@ -4,7 +4,7 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 # Eigen options
-set(CMAKE_CXX_FLAGS "-fopenmp -march=native")
+set(CMAKE_CXX_FLAGS "-fopenmp -march=native" CACHE STRING "" FORCE)
 
 # MKL options
 set(MKL_INTERFACE "lp64")
@@ -13,9 +13,6 @@ set(MKL_INTERFACE "lp64")
 # set(BLA_VENDOR "Intel10_64lp")
 
 add_library(thirdparty INTERFACE)
-
-add_subdirectory(imgui)
-add_subdirectory(implot)
 
 find_package(MKL CONFIG REQUIRED)
 find_package(LAPACK REQUIRED)
@@ -28,4 +25,4 @@ target_link_libraries(thirdparty INTERFACE LAPACK::LAPACK)
 target_compile_options(thirdparty INTERFACE "$<TARGET_PROPERTY:MKL::MKL,INTERFACE_COMPILE_OPTIONS>")
 target_include_directories(thirdparty INTERFACE "$<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>")
 target_link_libraries(thirdparty INTERFACE "$<LINK_ONLY:MKL::MKL>")
-target_link_libraries(thirdparty INTERFACE imgui implot Eigen3::Eigen Boost::filesystem)
+target_link_libraries(thirdparty INTERFACE Eigen3::Eigen Boost::filesystem)
