@@ -124,13 +124,13 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                     ImPlot::SetupAxisLimits(ImAxis_Y1, -25, 25);
 
                     ImPlot::SetNextLineStyle(COLOR_RED);
-                    ImPlot::PlotLine("f_var1(x)", &groundTruthPoints[0].col(0)[0], &groundTruthPoints[0].col(1)[0], groundTruthPoints[0].rows());
+                    ImPlot::PlotLine("f_var1(x)", &groundTruthPoints[0].col(0).array()[0], &groundTruthPoints[0].col(1).array()[0], groundTruthPoints[0].rows());
 
                     ImPlot::SetNextLineStyle(COLOR_BLACK);
-                    ImPlot::PlotLine("f_mean(x)", &groundTruthPoints[1].col(0)[0], &groundTruthPoints[1].col(1)[0], groundTruthPoints[1].rows());
+                    ImPlot::PlotLine("f_mean(x)", &groundTruthPoints[1].col(0).array()[0], &groundTruthPoints[1].col(1).array()[0], groundTruthPoints[1].rows());
 
                     ImPlot::SetNextLineStyle(COLOR_RED);
-                    ImPlot::PlotLine("f_var2(x)", &groundTruthPoints[2].col(0)[0], &groundTruthPoints[2].col(1)[0], groundTruthPoints[2].rows());
+                    ImPlot::PlotLine("f_var2(x)", &groundTruthPoints[2].col(0).array()[0], &groundTruthPoints[2].col(1).array()[0], groundTruthPoints[2].rows());
                     ImPlot::EndPlot();
                 }
 
@@ -152,16 +152,16 @@ void showGUI(const dMatrix2d &samples, const std::array<dMatrix2d, 3> &groundTru
                         ImPlot::SetupAxisLimits(ImAxis_Y1, -25, 25);
 
                         ImPlot::SetNextMarkerStyle(ImPlotMarker_Circle, IMPLOT_AUTO, COLOR_BLUE, IMPLOT_AUTO, COLOR_BLUE);
-                        ImPlot::PlotScatter("data", &samples.col(0)[0], &samples.col(1)[0], counts);
+                        ImPlot::PlotScatter("data", &samples.col(0).array()[0], &samples.col(1).array()[0], counts);
 
                         ImPlot::SetNextLineStyle(COLOR_RED);
-                        ImPlot::PlotLine("f_var1(x)", &prediction[0].col(0)[0], &prediction[0].col(1)[0], prediction[0].rows());
+                        ImPlot::PlotLine("f_var1(x)", &prediction[0].col(0).array()[0], &prediction[0].col(1).array()[0], prediction[0].rows());
 
                         ImPlot::SetNextLineStyle(COLOR_BLACK);
-                        ImPlot::PlotLine("f_mean(x)", &prediction[1].col(0)[0], &prediction[1].col(1)[0], prediction[1].rows());
+                        ImPlot::PlotLine("f_mean(x)", &prediction[1].col(0).array()[0], &prediction[1].col(1).array()[0], prediction[1].rows());
 
                         ImPlot::SetNextLineStyle(COLOR_RED);
-                        ImPlot::PlotLine("f_var2(x)", &prediction[2].col(0)[0], &prediction[2].col(1)[0], prediction[2].rows());
+                        ImPlot::PlotLine("f_var2(x)", &prediction[2].col(0).array()[0], &prediction[2].col(1).array()[0], prediction[2].rows());
                         ImPlot::EndPlot();
                     }
                 }
@@ -203,7 +203,7 @@ dMatrix2d getPointsFromFunction(const dMatrix2d &weights, double bias, double st
         points(i, 0) = start;
 
         auto designMatrix = makeDegisnMatrix(n, start);
-        points(i, 1) = (designMatrix * weights).item() + bias;
+        points(i, 1) = (designMatrix.mm(weights)).item() + bias;
 
         start += scale;
     }
@@ -288,8 +288,8 @@ void printPosteriorParameters(dMatrix2d &mean, dMatrix2d &variance)
 
 std::pair<double, double> calculatePredictiveParameters(const dMatrix2d &designMatrix, const dMatrix2d &priorMean, const dMatrix2d &priorVariance, double likelihoodVariance)
 {
-    double mean = (designMatrix * priorMean).item();
-    double variance = likelihoodVariance + (designMatrix * priorVariance * designMatrix.transpose()).item();
+    double mean = (designMatrix.mm(priorMean)).item();
+    double variance = likelihoodVariance + (designMatrix.mm(priorVariance.mm(designMatrix.transpose()))).item();
     return std::make_pair(mean, variance);
 }
 
@@ -312,7 +312,7 @@ std::array<dMatrix2d, 3> calculatePredictiveLines(const dMatrix2d &priorMean, co
         auto y = points(i, 1);
 
         auto designMatrix = makeDegisnMatrix(basis, x);
-        double variance = likelihoodVariance + (designMatrix * priorVariance * designMatrix.transpose()).item();
+        double variance = likelihoodVariance + (designMatrix.mm(priorVariance.mm(designMatrix.transpose()))).item();
         lines[0](i, 1) = y + variance;
         lines[2](i, 1) = y - variance;
     }
@@ -354,9 +354,9 @@ void modelDataGenerator(DataGenerator &generator, int basis, double precisionFor
 
         auto designMatrix = makeDegisnMatrix(basis, x);
 
-        priorVariance = aInversed * designMatrix.transpose() * designMatrix + dVariance.inverse();
+        priorVariance = aInversed * designMatrix.transpose().mm(designMatrix) + dVariance.inverse();
         priorVariance = priorVariance.inverse();
-        priorMean = priorVariance * (aInversed * designMatrix.transpose() * y + dVariance.inverse() * dMean);
+        priorMean = priorVariance.mm(aInversed * designMatrix.transpose() * y + dVariance.inverse().mm(dMean));
 
         printPosteriorParameters(priorMean, priorVariance);
         auto [mean, variance] = calculatePredictiveParameters(designMatrix, priorMean, priorVariance, generator.variance);

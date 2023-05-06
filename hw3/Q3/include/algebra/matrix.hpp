@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <vector>
 #include <valarray>
 #include <iterator>
@@ -16,13 +17,14 @@ namespace algebra
         Matrix2d();
         // Matrix2d(std::initializer_list<value_type>);
         // creates based on the rows and data size
-        explicit Matrix2d(std::size_t rows, const std::valarray<T> &data);
+        explicit Matrix2d(std::size_t rows, const std::valarray<value_type> &data);
         // creates based on the rows and cols directly
-        explicit Matrix2d(std::size_t rows, std::size_t cols, const std::valarray<T> &data);
+        explicit Matrix2d(std::size_t rows, std::size_t cols, const std::valarray<value_type> &data);
         // creates based on the rows and data size
-        explicit Matrix2d(std::size_t rows, const std::vector<T> &data);
-        // creates based on the rows and cols directly
-        explicit Matrix2d(std::size_t rows, std::size_t cols, const std::vector<T> &data);
+        explicit Matrix2d(std::size_t rows, const std::vector<value_type> &data);
+                // creates based on the rows and data size
+        explicit Matrix2d(std::size_t rows, std::size_t cols, const std::vector<value_type> &data);
+
         // creates an empty n x m matrix2d
         explicit Matrix2d(std::size_t rows, std::size_t cols);
         // creates an n x m matrix initialized with value
@@ -46,14 +48,11 @@ namespace algebra
             return this->_data.size();
         }
 
-        //  retrieve the copied data from row r of the matrix2d
-        //  due to slice_array does not support const reference of valarray
-        //  therefore, we generate a new valarray with the copied values of original valarray
-        std::valarray<value_type> row(std::size_t r) const;
+        Matrix2d<value_type> row(std::size_t r) const;
+        Matrix2d<value_type> col(std::size_t c) const;
+
         // retrieve refernce to the data from row r of the matrix2d
         std::slice_array<value_type> row(std::size_t r);
-        // retrieve the copied data from col c of the matrix2d
-        std::valarray<value_type> col(std::size_t c) const;
         // retrieve refernce to the data from col c of the matrix2d
         std::slice_array<value_type> col(std::size_t c);
         // create a new array from data
@@ -65,12 +64,15 @@ namespace algebra
         // genetate a new matrix2d that is the transposition of this one
         Matrix2d<value_type> transpose() const;
         Matrix2d<value_type> inverse() const;
+        Matrix2d<value_type> mm(const Matrix2d<value_type> &rhs) const;
+
         value_type sum() const;
         value_type mean() const;
         value_type min() const;
         value_type max() const;
         
         Matrix2d<value_type> abs() const;
+        Matrix2d<value_type> exp() const;
         Matrix2d<value_type> pow(double power) const;
 
         // define iterators
@@ -126,8 +128,9 @@ namespace algebra
     template <typename T>                                                                                \
     inline Matrix2d<T> operator _Op(const typename Matrix2d<T>::value_type &lhs, const Matrix2d<T> &rhs) \
     {                                                                                                    \
-        Matrix2d<T> result(rhs);                                                                         \
-        result _Op## = lhs;                                                                              \
+        /* broadcast scalars to matrix */                                                                \
+        Matrix2d<T> result(rhs.rows(), rhs.cols(), lhs);                                                 \
+        result _Op## = rhs;                                                                              \
         return result;                                                                                   \
     }                                                                                                    \
                                                                                                          \
