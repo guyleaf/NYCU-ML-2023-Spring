@@ -88,7 +88,11 @@
         "list": "cpp",
         "regex": "cpp",
         "shared_mutex": "cpp",
-        "cfenv": "cpp"
+        "cfenv": "cpp",
+        "strstream": "cpp",
+        "future": "cpp",
+        "typeindex": "cpp",
+        "*.ipp": "cpp"
     },
     "logViewer.watch": [
         {

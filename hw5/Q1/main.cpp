@@ -3,6 +3,7 @@
 #include <vector>
 #include <iterator>
 #include <limits>
+#define _USE_MATH_DEFINES
 #include <cmath>
 #include <random>
 
@@ -11,6 +12,12 @@
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
+
+#define OPTIM_ENABLE_EIGEN_WRAPPERS
+#include <optim.hpp>
+
+#include <autodiff/forward/real.hpp>
+#include <autodiff/forward/real/eigen.hpp>
 
 #include <boost/filesystem.hpp>
 #include <omp.h>
@@ -27,12 +34,12 @@ using MatrixXd = Eigen::MatrixXd;
 using MatrixX2d = Eigen::MatrixX2d;
 
 using VectorXd = Eigen::VectorXd;
+using Vector3d = Eigen::Vector3d;
 
-struct KernelParameters
+struct LossArguments
 {
-    double variance = 1;
-    double alpha = 1;
-    double lengthScale = 1;
+    const MatrixX2d &data;
+    double beta;
 };
 
 #pragma endregion
@@ -52,60 +59,117 @@ MatrixX2d parseDataFile(const fs::path &path)
     ifs.close();
 
     // because the vector is stored in row-major order
-    // we need to use row-major matrix, then convert it to column-major order
+    // we need to use row-major matrix first, then convert it to column-major order
     return Eigen::Matrix<double, Eigen::Dynamic, 2, Eigen::RowMajor>::Map(points.data(), points.size() / 2, 2);
+}
+
+#pragma endregion
+
+#pragma region Kernel Function
+
+template <typename DerivedA, typename DerivedB, typename Out = Eigen::Matrix<typename DerivedB::Scalar, DerivedA::RowsAtCompileTime, DerivedA::ColsAtCompileTime>>
+Out calculateRationalQuadraticKernel(const Eigen::MatrixBase<DerivedA> &diff, const Eigen::MatrixBase<DerivedB> &kernelParameters)
+{
+    return (kernelParameters[0] *
+            (1 + diff.array() / (2 * kernelParameters[1] * autodiff::detail::pow(kernelParameters[2], 2))).pow(-kernelParameters[1]));
+}
+
+template <typename DerivedA, typename DerivedB, typename Out = Eigen::Matrix<typename DerivedB::Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+Out calculateRationalQuadraticKernel(const Eigen::MatrixBase<DerivedA> &lhs, const Eigen::MatrixBase<DerivedA> &rhs, const Eigen::MatrixBase<DerivedB> &kernelParameters)
+{
+    Eigen::Matrix<typename DerivedA::Scalar, Eigen::Dynamic, Eigen::Dynamic> diff = (lhs.replicate(1, lhs.rows()).rowwise() - rhs.transpose()).array().pow(2);
+    return calculateRationalQuadraticKernel(diff, kernelParameters);
+}
+
+double calculateRationalQuadraticKernel(double lhs, double rhs, const Vector3d &kernelParameters)
+{
+    VectorXd diff = VectorXd::Constant(1, std::pow(lhs - rhs, 2));
+    return calculateRationalQuadraticKernel(diff, kernelParameters).value();
+}
+
+VectorXd calculateRationalQuadraticKernel(const VectorXd &lhs, double rhs, const Vector3d &kernelParameters)
+{
+    VectorXd diff = (lhs.array() - rhs).pow(2);
+    return calculateRationalQuadraticKernel(diff, kernelParameters);
+}
+
+template<typename Derived, typename Out = Eigen::Matrix<typename Derived::Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+Out calculateCovariance(const MatrixX2d &data, double beta, const Eigen::MatrixBase<Derived> &kernelParameters)
+{
+    Out covariance = calculateRationalQuadraticKernel(data.col(0), data.col(0), kernelParameters);
+    covariance.diagonal().array() += (1 / beta);
+    return covariance;
+}
+
+#pragma endregion
+
+#pragma region Optimizations
+
+autodiff::real calculateLoss(const autodiff::Vector3real &parameters, const MatrixX2d &data, double beta)
+{
+    autodiff::MatrixXreal covariance = calculateCovariance(data, beta, parameters);
+    return 0.5 * autodiff::detail::log(covariance.determinant())
+        + 0.5 * (data.col(1).transpose() * covariance.inverse() * data.col(1)).value()
+        + 0.5 * static_cast<double>(data.rows()) * autodiff::detail::log(2 * M_PI);
+}
+
+double evaluateOptimFn(const VectorXd &parameters, VectorXd *grad_out, void *args)
+{
+    auto lossArguments = reinterpret_cast<LossArguments*>(args);
+    autodiff::real u;
+    autodiff::Vector3real paramtersd = parameters.eval();
+
+    if (grad_out != nullptr)
+    {
+        auto lossFn = [lossArguments](const autodiff::Vector3real &_paramtersd)
+        {
+            return calculateLoss(_paramtersd, lossArguments->data, lossArguments->beta);
+        };
+
+        *grad_out = autodiff::gradient(lossFn, autodiff::wrt(paramtersd), autodiff::at(paramtersd), u);
+    }
+    else
+    {
+        u = calculateLoss(paramtersd, lossArguments->data, lossArguments->beta);
+    }
+
+    return u.val();
 }
 
 #pragma endregion
 
 #pragma region Custom Functions
 
-void drawPlot(const MatrixX2d &data, const MatrixXd &covariance, double beta, const KernelParameters &kernelParameters)
+void drawPlot(const MatrixX2d &data, const MatrixXd &covariance, double beta, const Vector3d &kernelParameters)
 {
-}
-
-double calculateRationalQuadraticKernel(double lhs, double rhs, const KernelParameters &kernelParameters)
-{
-    return kernelParameters.variance * 
-        std::pow(1 + std::pow(lhs - rhs, 2) / (2 * kernelParameters.alpha * std::pow(kernelParameters.lengthScale, 2)), -kernelParameters.alpha);
-}
-
-VectorXd calculateRationalQuadraticKernel(VectorXd lhs, double rhs, const KernelParameters &kernelParameters)
-{
-    return lhs.unaryExpr([rhs, kernelParameters](double x)
-                         { return calculateRationalQuadraticKernel(x, rhs, kernelParameters); });
-}
-
-MatrixXd calculateCovariance(const MatrixX2d &data, double beta, const KernelParameters &kernelParameters)
-{
-    auto fn = [data, kernelParameters](Eigen::Index i, Eigen::Index j)
-    {
-        return calculateRationalQuadraticKernel(data[i], data[j], kernelParameters);
-    };
-
-    MatrixXd covariance = MatrixXd::NullaryExpr(data.rows(), data.rows(), fn);
-    covariance.diagonal().array() += (1 / beta);
-    return covariance;
 }
 
 void modelData(const MatrixX2d &data, double beta)
 {
-    KernelParameters kernelParameters;
+    // variance, alpha, length scale
+    Vector3d kernelParameters = Vector3d::Constant(1);
+
     MatrixXd covariance = calculateCovariance(data, beta, kernelParameters);
 
-    KernelParameters optimizedKernelParameters = kernelParameters;
-    double dAlpha;
-    double dLengthScale;
-    do
-    {
-        dAlpha = optimizedKernelParameters.alpha;
-        dLengthScale = optimizedKernelParameters.lengthScale;
+    std::cout << covariance << std::endl;
 
-        dAlpha = std::abs(dAlpha - optimizedKernelParameters.alpha);
-        dLengthScale = std::abs(dLengthScale - optimizedKernelParameters.lengthScale);
-    } while (dAlpha >= STOP_APPROXIMATION_THRESHOLD || dLengthScale >= STOP_APPROXIMATION_THRESHOLD);
+    LossArguments args(data, beta);
+    VectorXd optimizedKernelParameters = kernelParameters;
+    
+    optim::algo_settings_t settings;
+    // settings.gd_settings.par_step_size = 1e-4;
+    settings.conv_failure_switch = 1;
+    settings.vals_bound = true;
+    settings.upper_bounds = Vector3d::Constant(1e5);
+    settings.lower_bounds = Vector3d::Constant(1e-5);
+    settings.print_level = 1;
+
+    optim::bfgs(optimizedKernelParameters, evaluateOptimFn, reinterpret_cast<void*>(&args), settings);
 
     MatrixXd optimizedCovariance = calculateCovariance(data, beta, optimizedKernelParameters);
+
+    std::cout << optimizedCovariance << std::endl << std::endl;
+    std::cout << optimizedKernelParameters << std::endl;
 }
 
 #pragma endregion
