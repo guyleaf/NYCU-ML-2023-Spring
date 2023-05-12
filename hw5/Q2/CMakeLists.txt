@@ -17,6 +17,9 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
     set(CMAKE_CXX_STANDARD 20)
 
+    set(CMAKE_CXX_FLAGS "-fopenmp -march=native -ffp-contract=fast" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS_DEBUG "-fsanitize=address -g")
+
     # Testing only available if this is the main app
     # Note this needs to be done in the main CMakeLists
     # since it calls enable_testing, which must be in the

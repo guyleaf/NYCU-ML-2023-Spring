@@ -1,5 +1,3 @@
-set(CMAKE_CXX_FLAGS "-fopenmp -march=native -ffp-contract=fast" CACHE STRING "" FORCE)
-
 add_library(thirdparty INTERFACE)
 
 find_package(Boost 1.75 REQUIRED COMPONENTS filesystem)
