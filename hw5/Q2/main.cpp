@@ -1,7 +1,7 @@
 #include <iostream>
 #include <iterator>
 #include <vector>
-#include <ranges>
+#include <algorithm>
 
 #include <boost/filesystem.hpp>
 #include <svm.h>
@@ -15,6 +15,33 @@ const std::string TRAIN_X_FILE = "X_train.csv";
 const std::string TRAIN_Y_FILE = "Y_train.csv";
 const std::string TEST_X_FILE = "X_test.csv";
 const std::string TEST_Y_FILE = "Y_test.csv";
+
+#pragma region Data Structures
+
+template <typename T>
+struct GridSearchRange
+{
+    T start = -1;
+    T end = -1;
+    T step = 1;
+};
+
+struct GridSearchSettings
+{
+    /* for poly */
+    GridSearchRange<int> degree;
+    GridSearchRange<double> coef0;
+
+    /* for poly/rbf */
+    GridSearchRange<double> gamma;
+
+    /* for C_SVC */
+    GridSearchRange<double> C;
+
+    int kFold = 3;
+};
+
+#pragma endregion
 
 #pragma region File Processing
 
@@ -171,44 +198,88 @@ double evaluate(const svm_problem &problem, const std::vector<double> &predictio
     return accuracy;
 }
 
+void train_evaluate(const svm_problem &trainProblem, const svm_problem &testProblem, const svm_parameter &parameter)
+{
+    auto model = train(trainProblem, parameter);
+    auto predictions = predict(*model, testProblem);
+    evaluate(testProblem, predictions);
+    svm_free_and_destroy_model(&model);
+}
+
+svm_parameter findCSVCParametersByGridSearch(const svm_problem &problem, const svm_parameter &defaultParameter, const GridSearchSettings &settings)
+{
+    GridSearchSettings _settings = settings;
+
+    if (defaultParameter.kernel_type != POLY)
+    {
+        _settings.degree.start = _settings.degree.end = defaultParameter.degree;
+        _settings.coef0.start = _settings.coef0.end = defaultParameter.coef0;
+
+        if (defaultParameter.kernel_type != RBF)
+        {
+            _settings.gamma.start = _settings.gamma.end = defaultParameter.gamma;
+        }
+    }
+
+    double bestAccuracy = 0;
+    svm_parameter bestParameter = defaultParameter;
+    svm_parameter parameter = bestParameter;
+    for (parameter.degree = _settings.degree.start; parameter.degree <= _settings.degree.end; parameter.degree += _settings.degree.step)
+    {
+        for (parameter.coef0 = _settings.coef0.start; parameter.coef0 <= _settings.coef0.end; parameter.coef0 += _settings.coef0.step)
+        {
+            for (parameter.gamma = _settings.gamma.start; parameter.gamma <= _settings.gamma.end; parameter.gamma += _settings.gamma.step)
+            {
+                for (parameter.C = _settings.C.start; parameter.C <= _settings.C.end; parameter.C += _settings.C.step)
+                {
+                    std::vector<double> targets(problem.l);
+                    svm_cross_validation(&problem, &parameter, _settings.kFold, targets.data());
+                    
+                    if (auto accuracy = evaluate(problem, targets); accuracy > bestAccuracy)
+                    {
+                        bestParameter = parameter;
+                        bestAccuracy = accuracy;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cout << "Best Cross Validation Accuracy: " << bestAccuracy << std::endl;
+    std::cout << "Degree: " << bestParameter.degree << std::endl;
+    std::cout << "Coef0: " << bestParameter.coef0 << std::endl;
+    std::cout << "Gamma: " << bestParameter.gamma << std::endl;
+    std::cout << "C: " << bestParameter.C << std::endl;
+
+    return bestParameter;
+}
+
 void solve(const svm_problem &trainProblem, const svm_problem &testProblem, int numberOfFeatures)
 {
     auto linearParameter = createSVMParameter(numberOfFeatures);
-    auto linearModel = train(trainProblem, linearParameter);
 
     auto polyParameter = createSVMParameter(numberOfFeatures);
     polyParameter.kernel_type = POLY;
-    auto polyModel = train(trainProblem, polyParameter);
 
     auto rbfParameter = createSVMParameter(numberOfFeatures);
     rbfParameter.kernel_type = RBF;
-    auto rbfModel = train(trainProblem, rbfParameter);
 
-    // Part 1
+    // Part 1 Defaults
 
     std::cout << "Linear Model" << std::endl;
-
-    auto predictions = predict(*linearModel, testProblem);
-    evaluate(testProblem, predictions);
+    train_evaluate(trainProblem, testProblem, linearParameter);
 
     std::cout << "Polynomial Model" << std::endl;
-
-    predictions = predict(*polyModel, testProblem);
-    evaluate(testProblem, predictions);
+    train_evaluate(trainProblem, testProblem, polyParameter);
 
     std::cout << "RBF Model" << std::endl;
+    train_evaluate(trainProblem, testProblem, rbfParameter);
 
-    predictions = predict(*rbfModel, testProblem);
-    evaluate(testProblem, predictions);
-
-    // Part 2
+    // Part 2 Grid Search
 
 
-    // Part 3
+    // Part 3 Custom Kernel (RBF + Linear)
 
-    svm_free_and_destroy_model(&linearModel);
-    svm_free_and_destroy_model(&polyModel);
-    svm_free_and_destroy_model(&rbfModel);
 }
 
 int main(int argc, char *argv[])
