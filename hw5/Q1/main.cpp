@@ -333,6 +333,10 @@ void modelData(const MatrixX2d &data, double beta)
 
     MatrixX3d f = generatePointsOfLine(data, beta, covariance, kernelParameters);
     MatrixX3d optimizedF = generatePointsOfLine(data, beta, optimizedCovariance, optimizedKernelParameters);
+
+    std::cout << "Optimized kernel parameters (variance, alpha, length scale)" << std::endl;
+    std::cout << optimizedKernelParameters << std::endl;
+
     showGUI(data, f, optimizedF);
 }
 

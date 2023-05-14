@@ -100,7 +100,12 @@ svm_problem makeProblem(const std::vector<std::vector<double>> &x, std::vector<d
     problem.y = y.data();
 
     problem.x = new svm_node *[problem.l];
-#pragma omp simd
+    for (int i = 0; i < problem.l; i++)
+    {
+        problem.x[i] = new svm_node[featureSize];
+    }
+
+#pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 0; i < problem.l; i++)
     {
         std::vector<svm_node> features;
@@ -119,9 +124,7 @@ svm_problem makeProblem(const std::vector<std::vector<double>> &x, std::vector<d
         // insert end of features
         features.push_back(svm_node{-1, 0});
 
-        auto tmp = new svm_node[features.size()];
-        std::ranges::copy(features, tmp);
-        problem.x[i] = tmp;
+        std::ranges::move(features, problem.x[i]);
     }
 
     return problem;
@@ -134,29 +137,39 @@ double calculateKernel(const std::valarray<double> &x1, const std::valarray<doub
     return linear + rbf;
 }
 
-svm_problem makeKernel(const std::vector<std::vector<double>> &x, std::vector<double> &y, const svm_parameter &parameter)
+svm_problem makeKernel(const std::vector<std::vector<double>> &x1, const std::vector<std::vector<double>> &x2, std::vector<double> &y, const svm_parameter &parameter)
 {
     svm_problem problem;
+    auto numberOfX1Data = static_cast<int>(x1.size());
+    auto numberOfX2Data = static_cast<int>(x2.size());
 
-    problem.l = static_cast<int>(x.size());
+    problem.l = numberOfX1Data;
     problem.y = y.data();
 
-    problem.x = new svm_node *[problem.l];
-#pragma omp parallel for num_threads(NUM_THREADS)
-    for (int i = 0; i < problem.l; i++)
+    problem.x = new svm_node *[numberOfX1Data];
+    for (int i = 0; i < numberOfX1Data; i++)
     {
-        auto tmp = new svm_node[problem.l + 1];
+        problem.x[i] = new svm_node[numberOfX2Data + 2];
+    }
 
-        tmp[0].index = 0;
-        tmp[0].value = i + 1;
+#pragma omp parallel for num_threads(NUM_THREADS)
+    for (int i = 0; i < numberOfX1Data; i++)
+    {
+        std::vector<svm_node> features(numberOfX2Data + 2);
+
+        auto xi = std::valarray<double>(x1[i].data(), x1[i].size());
+
+        features[0] = svm_node{0, static_cast<double>(i + 1)};
+
 #pragma omp simd
-        for (int j = 1; j <= problem.l; j++)
+        for (int j = 0; j < numberOfX2Data; j++)
         {
-            tmp[j].index = j;
-            tmp[j].value = calculateKernel(std::valarray<double>(x[i].data(), x[i].size()), std::valarray<double>(x[j - 1].data(), x[j - 1].size()), parameter);
+            features[j + 1] = svm_node{j + 1, calculateKernel(xi, std::valarray<double>(x2[j].data(), x2[j].size()), parameter)};
         }
 
-        problem.x[i] = tmp;
+        features[numberOfX2Data + 1] = svm_node{-1, 0};
+
+        std::ranges::move(features, problem.x[i]);
     }
 
     return problem;
@@ -355,7 +368,7 @@ svm_parameter findCSVCParametersByGridSearch(const std::vector<std::vector<doubl
                     parameter.gamma = std::pow(2, gamma);
                     parameter.C = std::pow(2, C);
 
-                    auto problem = makeKernel(x, y, parameter);
+                    auto problem = makeKernel(x, x, y, parameter);
 
                     std::vector<double> targets(problem.l);
                     svm_cross_validation(&problem, &parameter, settings.kFold, targets.data());
@@ -480,13 +493,13 @@ void solvePart3(const std::vector<std::vector<double>> &trainX, std::vector<doub
 
     parameter = findCSVCParametersByGridSearch(trainX, trainY, parameter, settings);
 
-    auto trainProblem = makeKernel(trainX, trainY, parameter);
-    auto testProblem = makeKernel(testX, testY, parameter);
+    auto trainProblem = makeKernel(trainX, trainX, trainY, parameter);
+    auto testProblem = makeKernel(testX, trainX, testY, parameter);
     train_evaluate(trainProblem, testProblem, parameter);
-    releaseProblem(trainProblem);
-    releaseProblem(testProblem);
 
     std::cout << "==================================================================" << std::endl;
+    releaseProblem(trainProblem);
+    releaseProblem(testProblem);
 }
 
 int main(int argc, char *argv[])
@@ -528,6 +541,7 @@ int main(int argc, char *argv[])
     {
         auto trainProblem = makeProblem(trainXData, trainYData);
         auto testProblem = makeProblem(testXData, testYData);
+        std::cout << testProblem.l << std::endl;
         solvePart1(trainProblem, testProblem, numberOfFeatures);
         releaseProblem(trainProblem);
         releaseProblem(testProblem);
