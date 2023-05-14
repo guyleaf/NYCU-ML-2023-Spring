@@ -10,7 +10,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["${cwd}/data", ">", "output.log"],
+            "args": ["${cwd}/data", "3", ">", "output.log"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [
@@ -29,7 +29,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["${cwd}/data", ">", "output.log"],
+            "args": ["${cwd}/data", "3", ">", "output.log"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [

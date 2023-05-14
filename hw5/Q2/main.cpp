@@ -1,7 +1,9 @@
 #include <iostream>
 #include <iterator>
 #include <vector>
+#include <valarray>
 #include <algorithm>
+#include <cmath>
 
 #include <boost/filesystem.hpp>
 #include <svm.h>
@@ -125,6 +127,41 @@ svm_problem makeProblem(const std::vector<std::vector<double>> &x, std::vector<d
     return problem;
 }
 
+double calculateKernel(const std::valarray<double> &x1, const std::valarray<double> &x2, const svm_parameter &parameter)
+{
+    auto linear = (x1 * x2).sum();
+    auto rbf = std::exp(-parameter.gamma * std::pow((x1 - x2), 2).sum());
+    return linear + rbf;
+}
+
+svm_problem makeKernel(const std::vector<std::vector<double>> &x, std::vector<double> &y, const svm_parameter &parameter)
+{
+    svm_problem problem;
+
+    problem.l = static_cast<int>(x.size());
+    problem.y = y.data();
+
+    problem.x = new svm_node *[problem.l];
+#pragma omp parallel for num_threads(NUM_THREADS)
+    for (int i = 0; i < problem.l; i++)
+    {
+        auto tmp = new svm_node[problem.l + 1];
+
+        tmp[0].index = 0;
+        tmp[0].value = i + 1;
+#pragma omp simd
+        for (int j = 1; j <= problem.l; j++)
+        {
+            tmp[j].index = j;
+            tmp[j].value = calculateKernel(std::valarray<double>(x[i].data(), x[i].size()), std::valarray<double>(x[j - 1].data(), x[j - 1].size()), parameter);
+        }
+
+        problem.x[i] = tmp;
+    }
+
+    return problem;
+}
+
 #pragma endregion
 
 void releaseProblem(svm_problem &problem)
@@ -167,12 +204,16 @@ svm_model *train(const svm_problem &problem, const svm_parameter &parameter)
         throw std::runtime_error(error);
     }
 
+    std::cout << "Start training..." << std::endl;
+
     return svm_train(&problem, &parameter);
 }
 
 std::vector<double> predict(const svm_model &model, const svm_problem &problem)
 {
     std::vector<double> predictions(problem.l);
+
+    std::cout << "Start predicting..." << std::endl;
 #pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 0; i < problem.l; i++)
     {
@@ -184,6 +225,8 @@ std::vector<double> predict(const svm_model &model, const svm_problem &problem)
 double evaluate(const svm_problem &problem, const std::vector<double> &predictions)
 {
     int correctCount = 0;
+
+    std::cout << "Start evaluating..." << std::endl;
 #pragma omp parallel for reduction(+ : correctCount) num_threads(NUM_THREADS)
     for (int i = 0; i < problem.l; i++)
     {
@@ -206,36 +249,70 @@ void train_evaluate(const svm_problem &trainProblem, const svm_problem &testProb
     svm_free_and_destroy_model(&model);
 }
 
+template <typename T>
+std::vector<T> generateSequence(const GridSearchRange<T> &range)
+{
+    std::vector<T> sequence;
+
+    T i = range.start;
+    while (i < range.end)
+    {
+        sequence.push_back(i);
+        i += range.step;
+    }
+    return sequence;
+}
+
 svm_parameter findCSVCParametersByGridSearch(const svm_problem &problem, const svm_parameter &defaultParameter, const GridSearchSettings &settings)
 {
     GridSearchSettings _settings = settings;
 
-    if (defaultParameter.kernel_type != POLY)
+    if (defaultParameter.kernel_type != PRECOMPUTED && defaultParameter.kernel_type != POLY)
     {
-        _settings.degree.start = _settings.degree.end = defaultParameter.degree;
-        _settings.coef0.start = _settings.coef0.end = defaultParameter.coef0;
+        _settings.degree.start = defaultParameter.degree;
+        _settings.degree.end = defaultParameter.degree + 1;
+        _settings.degree.step = 1;
+
+        _settings.coef0.start = defaultParameter.coef0;
+        _settings.coef0.end = defaultParameter.coef0 + 1;
+        _settings.coef0.step = 1;
 
         if (defaultParameter.kernel_type != RBF)
         {
-            _settings.gamma.start = _settings.gamma.end = defaultParameter.gamma;
+            _settings.gamma.start = defaultParameter.gamma;
+            _settings.gamma.end = defaultParameter.gamma + 1;
+            _settings.gamma.step = 1;
         }
     }
 
+    auto degreeList = generateSequence(_settings.degree);
+    auto coef0List = generateSequence(_settings.coef0);
+    auto gammaList = generateSequence(_settings.gamma);
+    auto CList = generateSequence(_settings.C);
+
     double bestAccuracy = 0;
     svm_parameter bestParameter = defaultParameter;
-    svm_parameter parameter = bestParameter;
-    for (parameter.degree = _settings.degree.start; parameter.degree <= _settings.degree.end; parameter.degree += _settings.degree.step)
+#pragma omp parallel for collapse(4) num_threads(NUM_THREADS)
+    for (auto degree : degreeList)
     {
-        for (parameter.coef0 = _settings.coef0.start; parameter.coef0 <= _settings.coef0.end; parameter.coef0 += _settings.coef0.step)
+        for (auto coef0 : coef0List)
         {
-            for (parameter.gamma = _settings.gamma.start; parameter.gamma <= _settings.gamma.end; parameter.gamma += _settings.gamma.step)
+            for (auto gamma : gammaList)
             {
-                for (parameter.C = _settings.C.start; parameter.C <= _settings.C.end; parameter.C += _settings.C.step)
+                for (auto C : CList)
                 {
+                    svm_parameter parameter = defaultParameter;
+                    parameter.degree = degree;
+                    parameter.coef0 = std::pow(2, coef0);
+                    parameter.gamma = std::pow(2, gamma);
+                    parameter.C = std::pow(2, C);
+
                     std::vector<double> targets(problem.l);
                     svm_cross_validation(&problem, &parameter, _settings.kFold, targets.data());
-                    
-                    if (auto accuracy = evaluate(problem, targets); accuracy > bestAccuracy)
+
+                    auto accuracy = evaluate(problem, targets);
+#pragma omp critical
+                    if (accuracy > bestAccuracy)
                     {
                         bestParameter = parameter;
                         bestAccuracy = accuracy;
@@ -254,7 +331,59 @@ svm_parameter findCSVCParametersByGridSearch(const svm_problem &problem, const s
     return bestParameter;
 }
 
-void solve(const svm_problem &trainProblem, const svm_problem &testProblem, int numberOfFeatures)
+svm_parameter findCSVCParametersByGridSearch(const std::vector<std::vector<double>> &x, std::vector<double> &y, const svm_parameter &defaultParameter, const GridSearchSettings &settings)
+{
+    auto degreeList = generateSequence(settings.degree);
+    auto coef0List = generateSequence(settings.coef0);
+    auto gammaList = generateSequence(settings.gamma);
+    auto CList = generateSequence(settings.C);
+
+    double bestAccuracy = 0;
+    svm_parameter bestParameter = defaultParameter;
+#pragma omp parallel for collapse(4) num_threads(NUM_THREADS)
+    for (auto degree : degreeList)
+    {
+        for (auto coef0 : coef0List)
+        {
+            for (auto gamma : gammaList)
+            {
+                for (auto C : CList)
+                {
+                    svm_parameter parameter = defaultParameter;
+                    parameter.degree = degree;
+                    parameter.coef0 = std::pow(2, coef0);
+                    parameter.gamma = std::pow(2, gamma);
+                    parameter.C = std::pow(2, C);
+
+                    auto problem = makeKernel(x, y, parameter);
+
+                    std::vector<double> targets(problem.l);
+                    svm_cross_validation(&problem, &parameter, settings.kFold, targets.data());
+
+                    auto accuracy = evaluate(problem, targets);
+                    releaseProblem(problem);
+
+#pragma omp critical
+                    if (accuracy > bestAccuracy)
+                    {
+                        bestParameter = parameter;
+                        bestAccuracy = accuracy;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cout << "Best Cross Validation Accuracy: " << bestAccuracy << std::endl;
+    std::cout << "Degree: " << bestParameter.degree << std::endl;
+    std::cout << "Coef0: " << bestParameter.coef0 << std::endl;
+    std::cout << "Gamma: " << bestParameter.gamma << std::endl;
+    std::cout << "C: " << bestParameter.C << std::endl;
+
+    return bestParameter;
+}
+
+void solvePart1(const svm_problem &trainProblem, const svm_problem &testProblem, int numberOfFeatures)
 {
     auto linearParameter = createSVMParameter(numberOfFeatures);
 
@@ -265,28 +394,106 @@ void solve(const svm_problem &trainProblem, const svm_problem &testProblem, int 
     rbfParameter.kernel_type = RBF;
 
     // Part 1 Defaults
+    std::cout << "Part 1" << std::endl;
 
     std::cout << "Linear Model" << std::endl;
     train_evaluate(trainProblem, testProblem, linearParameter);
 
+    std::cout << "-----------------------------------------------------------------" << std::endl;
+
     std::cout << "Polynomial Model" << std::endl;
     train_evaluate(trainProblem, testProblem, polyParameter);
+
+    std::cout << "-----------------------------------------------------------------" << std::endl;
 
     std::cout << "RBF Model" << std::endl;
     train_evaluate(trainProblem, testProblem, rbfParameter);
 
+    std::cout << "==================================================================" << std::endl;
+}
+
+void solvePart2(const svm_problem &trainProblem, const svm_problem &testProblem, int numberOfFeatures)
+{
+    auto linearParameter = createSVMParameter(numberOfFeatures);
+
+    auto polyParameter = createSVMParameter(numberOfFeatures);
+    polyParameter.kernel_type = POLY;
+
+    auto rbfParameter = createSVMParameter(numberOfFeatures);
+    rbfParameter.kernel_type = RBF;
+
     // Part 2 Grid Search
+    std::cout << "Part 2" << std::endl;
 
+    GridSearchSettings settings;
+    settings.degree.start = 1;
+    settings.degree.end = 10;
+    settings.coef0.start = -10;
+    settings.coef0.end = 11;
+    settings.gamma.start = -10;
+    settings.gamma.end = 11;
+    settings.C.start = -10;
+    settings.C.end = 11;
+    settings.kFold = 5;
 
-    // Part 3 Custom Kernel (RBF + Linear)
+    std::cout << "Linear Model" << std::endl;
+    linearParameter = findCSVCParametersByGridSearch(trainProblem, linearParameter, settings);
+    train_evaluate(trainProblem, testProblem, linearParameter);
 
+    std::cout << "-----------------------------------------------------------------" << std::endl;
+
+    std::cout << "Polynomial Model" << std::endl;
+    polyParameter = findCSVCParametersByGridSearch(trainProblem, polyParameter, settings);
+    train_evaluate(trainProblem, testProblem, polyParameter);
+
+    std::cout << "-----------------------------------------------------------------" << std::endl;
+
+    std::cout << "RBF Model" << std::endl;
+    rbfParameter = findCSVCParametersByGridSearch(trainProblem, polyParameter, settings);
+    train_evaluate(trainProblem, testProblem, rbfParameter);
+
+    std::cout << "==================================================================" << std::endl;
+}
+
+void solvePart3(const std::vector<std::vector<double>> &trainX, std::vector<double> &trainY, const std::vector<std::vector<double>> &testX, std::vector<double> &testY, int numberOfFeatures)
+{
+    auto parameter = createSVMParameter(numberOfFeatures);
+    parameter.kernel_type = PRECOMPUTED;
+
+    // Part 3 RBF + Linear kernel
+    std::cout << "Part 3" << std::endl;
+
+    GridSearchSettings settings;
+    settings.degree.start = parameter.degree;
+    settings.degree.end = parameter.degree + 1;
+    settings.degree.step = 1;
+
+    settings.coef0.start = parameter.coef0;
+    settings.coef0.end = parameter.coef0 + 1;
+    settings.coef0.step = 1;
+
+    settings.gamma.start = -10;
+    settings.gamma.end = 11;
+    settings.C.start = -10;
+    settings.C.end = 11;
+    settings.kFold = 5;
+
+    parameter = findCSVCParametersByGridSearch(trainX, trainY, parameter, settings);
+
+    auto trainProblem = makeKernel(trainX, trainY, parameter);
+    auto testProblem = makeKernel(testX, testY, parameter);
+    train_evaluate(trainProblem, testProblem, parameter);
+    releaseProblem(trainProblem);
+    releaseProblem(testProblem);
+
+    std::cout << "==================================================================" << std::endl;
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2)
+    if (argc < 3)
     {
-        std::cerr << "Usage: " << argv[0] << " <data path>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <data path> <mode>" << std::endl;
         return 1;
     }
 
@@ -299,6 +506,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    argv++;
+
+    auto mode = std::stoi(*argv);
+
     omp_set_num_threads(NUM_THREADS);
 
     auto trainXData = parseXFile(path / TRAIN_X_FILE);
@@ -306,13 +517,38 @@ int main(int argc, char *argv[])
     auto testXData = parseXFile(path / TEST_X_FILE);
     auto testYData = parseYFile(path / TEST_Y_FILE);
 
-    auto trainProblem = makeProblem(trainXData, trainYData);
-    auto testProblem = makeProblem(testXData, testYData);
-
     auto numberOfFeatures = static_cast<int>(trainXData[0].size());
-    solve(trainProblem, testProblem, numberOfFeatures);
 
-    releaseProblem(trainProblem);
-    releaseProblem(testProblem);
+    // Don't print anything
+    svm_set_print_string_function([](const char *) {});
+
+    switch (mode)
+    {
+    case 1:
+    {
+        auto trainProblem = makeProblem(trainXData, trainYData);
+        auto testProblem = makeProblem(testXData, testYData);
+        solvePart1(trainProblem, testProblem, numberOfFeatures);
+        releaseProblem(trainProblem);
+        releaseProblem(testProblem);
+        break;
+    }
+    case 2:
+    {
+        auto trainProblem = makeProblem(trainXData, trainYData);
+        auto testProblem = makeProblem(testXData, testYData);
+        solvePart2(trainProblem, testProblem, numberOfFeatures);
+        releaseProblem(trainProblem);
+        releaseProblem(testProblem);
+        break;
+    }
+    case 3:
+        solvePart3(trainXData, trainYData, testXData, testYData, numberOfFeatures);
+        break;
+    default:
+        std::cerr << "Unknown mode." << std::endl;
+        return 1;
+    }
+
     return 0;
 }

@@ -4,10 +4,34 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "launch",
+            "label": "launch Part 1",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
-            "args": ["./data", ">", "output_task.log"],
+            "args": ["./data", "1", ">", "output_task_1.log"],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "ASAN_OPTIONS": ""
+                }
+            }
+        },
+        {
+            "label": "launch Part 2",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "args": ["./data", "2", ">", "output_task_2.log"],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "ASAN_OPTIONS": ""
+                }
+            }
+        },
+        {
+            "label": "launch Part 3",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "args": ["./data", "3", ">", "output_task_3.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {

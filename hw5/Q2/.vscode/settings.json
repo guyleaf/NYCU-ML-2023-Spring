@@ -61,6 +61,7 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "ranges": "cpp",
-        "optional": "cpp"
+        "optional": "cpp",
+        "valarray": "cpp"
     }
 }
