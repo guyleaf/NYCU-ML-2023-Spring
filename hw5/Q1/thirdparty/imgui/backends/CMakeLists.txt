@@ -9,7 +9,7 @@ add_library(imgui_backend_glfw imgui_impl_glfw.cpp)
 add_library(imgui_backend_opengl3 imgui_impl_opengl3.cpp)
 
 find_package(OpenGL REQUIRED)
-target_link_libraries(imgui_backend_opengl3 PUBLIC OpenGL::GL)
+target_link_libraries(imgui_backend_opengl3 PUBLIC OpenGL::GL ${CMAKE_DL_LIBS})
 
 find_package(glfw3 3.3 REQUIRED)
 target_link_libraries(imgui_backend_glfw PUBLIC glfw)

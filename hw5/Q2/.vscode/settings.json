@@ -62,6 +62,9 @@
         "variant": "cpp",
         "ranges": "cpp",
         "optional": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "source_location": "cpp",
+        "shared_mutex": "cpp",
+        "sstream": "cpp"
     }
 }

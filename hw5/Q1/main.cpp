@@ -6,6 +6,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <random>
+#include <fstream>
 
 #include <imgui.h>
 #include <implot.h>
@@ -15,7 +16,7 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 #define NUM_THREADS 12
-#define EIGEN_USE_MKL_ALL
+// #define EIGEN_USE_MKL_ALL
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -271,6 +272,8 @@ double evaluateOptimFn(const VectorXd &parameters, VectorXd *grad_out, void *arg
 
     if (grad_out != nullptr)
     {
+        // in order to use external data in autodiff library
+        // create a lambda function to wrap the loss function
         auto lossFn = [lossArguments](const autodiff::Vector3real &_paramtersd)
         {
             return calculateLoss(_paramtersd, lossArguments->data, lossArguments->beta);
@@ -303,6 +306,7 @@ MatrixX3d generatePointsOfLine(const MatrixX2d &data, double beta, const MatrixX
         VectorXd kernel = calculateRationalQuadraticKernel(data.col(0), row[0], kernelParameters);
 
         Eigen::Matrix<double, 1, Eigen::Dynamic> common = kernel.transpose() * inv_covariance;
+        // row: [mean, f, variance]
         row[1] = (common * data.col(1)).value();
         row[2] = k - (common * kernel).value();
     }
@@ -314,11 +318,10 @@ void modelData(const MatrixX2d &data, double beta)
 {
     // variance, alpha, length scale
     Vector3d kernelParameters = Vector3d::Constant(1);
+    // calculate C from p(y) = N(y|0, C)
     MatrixXd covariance = calculateCovariance(data, beta, kernelParameters);
 
-    LossArguments args(data, beta);
-    VectorXd optimizedKernelParameters = kernelParameters;
-    
+    // Optimization
     optim::algo_settings_t settings;
     // settings.gd_settings.par_step_size = 1e-4;
     settings.conv_failure_switch = 1;
@@ -327,16 +330,23 @@ void modelData(const MatrixX2d &data, double beta)
     settings.lower_bounds = Vector3d::Constant(1e-5);
     settings.print_level = 1;
 
+    // externel data used in loss term
+    LossArguments args{data, beta};
+    VectorXd optimizedKernelParameters = kernelParameters;
+    // optimize the kernel parameters by bfgs algorithm
     optim::bfgs(optimizedKernelParameters, evaluateOptimFn, reinterpret_cast<void*>(&args), settings);
 
+    // calculate C after optimizing the kernel parameters
     MatrixXd optimizedCovariance = calculateCovariance(data, beta, optimizedKernelParameters);
 
+    // sample data points from predictive distribution p(y*|y) with different covariance
     MatrixX3d f = generatePointsOfLine(data, beta, covariance, kernelParameters);
     MatrixX3d optimizedF = generatePointsOfLine(data, beta, optimizedCovariance, optimizedKernelParameters);
 
     std::cout << "Optimized kernel parameters (variance, alpha, length scale)" << std::endl;
     std::cout << optimizedKernelParameters << std::endl;
 
+    // Plot the results
     showGUI(data, f, optimizedF);
 }
 

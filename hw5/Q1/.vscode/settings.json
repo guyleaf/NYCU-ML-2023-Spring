@@ -92,7 +92,8 @@
         "strstream": "cpp",
         "future": "cpp",
         "typeindex": "cpp",
-        "*.ipp": "cpp"
+        "*.ipp": "cpp",
+        "source_location": "cpp"
     },
     "logViewer.watch": [
         {
