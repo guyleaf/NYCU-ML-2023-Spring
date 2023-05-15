@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iterator>
+#include <fstream>
 #include <vector>
 #include <valarray>
 #include <algorithm>
@@ -9,7 +10,7 @@
 #include <svm.h>
 #include <omp.h>
 
-#define NUM_THREADS 12
+#define NUM_THREADS 18
 
 namespace fs = boost::filesystem;
 
@@ -96,16 +97,20 @@ svm_problem makeProblem(const std::vector<std::vector<double>> &x, std::vector<d
     auto featureSize = static_cast<int>(x[0].size());
     svm_problem problem;
 
+    // number of data instances
     problem.l = static_cast<int>(x.size());
+    // data labels
     problem.y = y.data();
 
+    // data features: [N, pixels]
     problem.x = new svm_node *[problem.l];
     for (int i = 0; i < problem.l; i++)
     {
         problem.x[i] = new svm_node[featureSize];
     }
 
-#pragma omp parallel for num_threads(NUM_THREADS)
+    // data conversion
+#pragma omp parallel for
     for (int i = 0; i < problem.l; i++)
     {
         std::vector<svm_node> features;
@@ -124,7 +129,7 @@ svm_problem makeProblem(const std::vector<std::vector<double>> &x, std::vector<d
         // insert end of features
         features.push_back(svm_node{-1, 0});
 
-        std::ranges::move(features, problem.x[i]);
+        std::move(features.begin(), features.end(), problem.x[i]);
     }
 
     return problem;
@@ -134,7 +139,8 @@ double calculateKernel(const std::valarray<double> &x1, const std::valarray<doub
 {
     auto linear = (x1 * x2).sum();
     auto rbf = std::exp(-parameter.gamma * std::pow((x1 - x2), 2).sum());
-    return linear + rbf;
+    auto poly = std::pow(parameter.gamma * linear + parameter.coef0, parameter.degree);
+    return rbf * poly;
 }
 
 svm_problem makeKernel(const std::vector<std::vector<double>> &x1, const std::vector<std::vector<double>> &x2, std::vector<double> &y, const svm_parameter &parameter)
@@ -146,13 +152,14 @@ svm_problem makeKernel(const std::vector<std::vector<double>> &x1, const std::ve
     problem.l = numberOfX1Data;
     problem.y = y.data();
 
+    // data features: [N, pixels]
     problem.x = new svm_node *[numberOfX1Data];
     for (int i = 0; i < numberOfX1Data; i++)
     {
         problem.x[i] = new svm_node[numberOfX2Data + 2];
     }
 
-#pragma omp parallel for num_threads(NUM_THREADS)
+#pragma omp parallel for
     for (int i = 0; i < numberOfX1Data; i++)
     {
         std::vector<svm_node> features(numberOfX2Data + 2);
@@ -169,7 +176,7 @@ svm_problem makeKernel(const std::vector<std::vector<double>> &x1, const std::ve
 
         features[numberOfX2Data + 1] = svm_node{-1, 0};
 
-        std::ranges::move(features, problem.x[i]);
+        std::move(features.begin(), features.end(), problem.x[i]);
     }
 
     return problem;
@@ -179,7 +186,7 @@ svm_problem makeKernel(const std::vector<std::vector<double>> &x1, const std::ve
 
 void releaseProblem(svm_problem &problem)
 {
-#pragma omp parallel for num_threads(NUM_THREADS)
+#pragma omp parallel for
     for (int i = 0; i < problem.l; i++)
     {
         delete[] problem.x[i];
@@ -227,7 +234,7 @@ std::vector<double> predict(const svm_model &model, const svm_problem &problem)
     std::vector<double> predictions(problem.l);
 
     std::cout << "Start predicting..." << std::endl;
-#pragma omp parallel for num_threads(NUM_THREADS)
+#pragma omp parallel for
     for (int i = 0; i < problem.l; i++)
     {
         predictions[i] = svm_predict(&model, problem.x[i]);
@@ -240,7 +247,7 @@ double evaluate(const svm_problem &problem, const std::vector<double> &predictio
     int correctCount = 0;
 
     std::cout << "Start evaluating..." << std::endl;
-#pragma omp parallel for reduction(+ : correctCount) num_threads(NUM_THREADS)
+#pragma omp parallel for reduction(+ : correctCount)
     for (int i = 0; i < problem.l; i++)
     {
         if (problem.y[i] == predictions[i])
@@ -305,7 +312,7 @@ svm_parameter findCSVCParametersByGridSearch(const svm_problem &problem, const s
 
     double bestAccuracy = 0;
     svm_parameter bestParameter = defaultParameter;
-#pragma omp parallel for collapse(4) num_threads(NUM_THREADS)
+#pragma omp parallel for collapse(4)
     for (auto degree : degreeList)
     {
         for (auto coef0 : coef0List)
@@ -353,7 +360,7 @@ svm_parameter findCSVCParametersByGridSearch(const std::vector<std::vector<doubl
 
     double bestAccuracy = 0;
     svm_parameter bestParameter = defaultParameter;
-#pragma omp parallel for collapse(4) num_threads(NUM_THREADS)
+#pragma omp parallel for collapse(4)
     for (auto degree : degreeList)
     {
         for (auto coef0 : coef0List)
@@ -440,13 +447,17 @@ void solvePart2(const svm_problem &trainProblem, const svm_problem &testProblem,
 
     GridSearchSettings settings;
     settings.degree.start = 1;
-    settings.degree.end = 10;
-    settings.coef0.start = -10;
-    settings.coef0.end = 11;
-    settings.gamma.start = -10;
-    settings.gamma.end = 11;
-    settings.C.start = -10;
-    settings.C.end = 11;
+    settings.degree.end = 11;
+    settings.degree.step = 2;
+    settings.coef0.start = -5;
+    settings.coef0.end = 6;
+    settings.coef0.step = 2;
+    settings.gamma.start = -5;
+    settings.gamma.end = 6;
+    settings.gamma.step = 2;
+    settings.C.start = -5;
+    settings.C.end = 6;
+    settings.C.step = 2;
     settings.kFold = 5;
 
     std::cout << "Linear Model" << std::endl;
@@ -487,8 +498,10 @@ void solvePart3(const std::vector<std::vector<double>> &trainX, std::vector<doub
 
     settings.gamma.start = -10;
     settings.gamma.end = 11;
+    settings.gamma.step = 2;
     settings.C.start = -10;
     settings.C.end = 11;
+    settings.C.step = 2;
     settings.kFold = 5;
 
     parameter = findCSVCParametersByGridSearch(trainX, trainY, parameter, settings);
@@ -541,7 +554,6 @@ int main(int argc, char *argv[])
     {
         auto trainProblem = makeProblem(trainXData, trainYData);
         auto testProblem = makeProblem(testXData, testYData);
-        std::cout << testProblem.l << std::endl;
         solvePart1(trainProblem, testProblem, numberOfFeatures);
         releaseProblem(trainProblem);
         releaseProblem(testProblem);
