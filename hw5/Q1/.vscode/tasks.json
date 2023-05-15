@@ -7,7 +7,7 @@
             "label": "launch",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
-            "args": ["./data", "1", ">", "output_task.log"],
+            "args": ["./data", "100", ">", "output_task.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build"
             }

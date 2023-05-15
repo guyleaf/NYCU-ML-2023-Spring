@@ -252,18 +252,76 @@ Used library => Corresponding library in homework description
 
 * Figure
 
-  ![Result](assets/Screenshot from 2023-05-14 20-16-01.png)
+  ![image-20230515232722862](assets/image-20230515232722862.png)
 
 ### Observations and discussion
 
 * Before optimizing the kernel parameters of RBF function
   * the variance for each $x$ is unstable.
   * some training data points are not fitted well, especially in the edge of curve.
+  
 * After optimizing the kernel parameters of RBF function
   * the problems above are relieved.
   * but the variances in intervals which do not have training data points are super large.
     * It is quite reasonable because we rely on kernel function to calculate the similarity between training data and $x$.
+  
 * If we adjust hyperparameter $\beta$, what it will happen.
+
+  > The inverse of $\beta$ is the variance of error noise.
+  >
+  > In theory, the bigger the $\beta$ is, the smaller the variance is.
+  >
+  >  
+  >
+  > As you can see, if we increate the $\beta$ value, the regression line will coverage to different local minimum.
+  >
+  > In particular, from $\beta = 1$ to $4$, from $\beta = 5$ to $7$, from $\beta = 10$ to $100$.
+  >
+  > In the first part, it is still keep coveraging the training data.
+  >
+  > In the second part, almost all points are coveraged.
+  >
+  > In the last part, the regression line will be overfitting to the training data.
+
+  * $\beta = 1$
+
+    ![image-20230515232327787](assets/image-20230515232327787.png)
+
+  * $\beta = 2$
+
+    ![image-20230515232408145](assets/image-20230515232408145.png)
+
+  * $\beta = 3$
+
+    ![image-20230515232439106](assets/image-20230515232439106.png)
+
+  * $\beta = 4$
+
+    ![image-20230515232539584](assets/image-20230515232539584.png)
+
+  * $\beta = 5$
+
+    ![image-20230515232722862](assets/image-20230515232722862.png)
+
+  * $\beta = 6$
+
+    ![image-20230515232931323](assets/image-20230515232931323.png)
+
+  * $\beta = 7$
+
+    ![image-20230515233302258](assets/image-20230515233302258.png)
+
+  * $\beta = 10$
+
+    ![image-20230515233452316](assets/image-20230515233452316.png)
+
+  * $\beta = 20$
+
+    ![image-20230515233518552](assets/image-20230515233518552.png)
+
+  * $\beta = 100$
+
+    ![image-20230515233642699](assets/image-20230515233642699.png)
 
 ## SVM
 
