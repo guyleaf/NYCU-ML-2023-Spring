@@ -551,15 +551,19 @@ Used library => Corresponding library in homework description
 
   > Accuracy of test data is 0.96.
 
-  ![image-20230515192452544](assets/image-20230515192452544.png)
+  ![image-20230515220701011](assets/image-20230515220701011.png)
 
 * Polynomial model
 
-  > Accuracy of test data is 0.96.
+  > Accuracy of test data is 0.9804.
+
+  ![image-20230515220730475](assets/image-20230515220730475.png)
 
 * RBF model
 
-  > Accuracy of test data is 0.96.
+  > Accuracy of test data is 0.9792.
+  
+  ![image-20230515220800691](assets/image-20230515220800691.png)
 
 #### Part3
 
