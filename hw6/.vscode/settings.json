@@ -65,6 +65,12 @@
         "valarray": "cpp",
         "source_location": "cpp",
         "shared_mutex": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "core": "cpp",
+        "dense": "cpp",
+        "complex": "cpp",
+        "set": "cpp",
+        "unordered_set": "cpp",
+        "specialfunctions": "cpp"
     }
 }

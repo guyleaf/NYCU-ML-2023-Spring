@@ -37,12 +37,13 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
+add_subdirectory(src)
 add_subdirectory(thirdparty)
 
 add_library(common INTERFACE)
 target_compile_features(common INTERFACE cxx_std_20)
 target_include_directories(common INTERFACE "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(common INTERFACE thirdparty)
+target_link_libraries(common INTERFACE src thirdparty)
 
 # Main executable code
 add_executable(mlhw6_kernel_kmeans kernel_kmeans.cpp)

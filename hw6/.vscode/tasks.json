@@ -11,7 +11,7 @@
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
-                    "ASAN_OPTIONS": ""
+                    "OMP_NUM_THREADS": "15"
                 }
             }
         },
