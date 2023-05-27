@@ -28,7 +28,6 @@ std::pair<Eigen::MatrixX3d, Eigen::MatrixX2i> preprocess(Magick::Image &image)
     image.writePixels(Magick::QuantumType::RGBQuantum, tmp.data());
     std::vector<double> pixels(size * 3);
     std::move(tmp.begin(), tmp.end(), pixels.begin());
-    
 
     std::vector<int> points(size * 2);
 #pragma omp parallel for collapse(2)
@@ -45,7 +44,8 @@ std::pair<Eigen::MatrixX3d, Eigen::MatrixX2i> preprocess(Magick::Image &image)
     using MatrixX3dRowMajor = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>;
     using MatrixX2iRowMajor = Eigen::Matrix<int, Eigen::Dynamic, 2, Eigen::RowMajor>;
 
-    return std::make_pair<Eigen::MatrixX3d, Eigen::MatrixX2d>(MatrixX3dRowMajor::Map(pixels.data(), pixels.size()), MatrixX2iRowMajor::Map(points.data(), points.size()));
+    return std::make_pair<Eigen::MatrixX3d, Eigen::MatrixX2d>(
+        MatrixX3dRowMajor::Map(pixels.data(), pixels.size()), MatrixX2iRowMajor::Map(points.data(), points.size()));
 }
 
 #pragma endregion
