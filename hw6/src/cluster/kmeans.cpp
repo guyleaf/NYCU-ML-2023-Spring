@@ -17,27 +17,23 @@ namespace mlhw6
         auto sampler = std::uniform_int_distribution(0, static_cast<int>(x.rows()) - 1);
         candidates.push_back(sampler(rng));
 
+        // 2. For each data point x not chosen yet, compute D(x)^2, the distance between x and the nearest center that has already been chosen.
+        Eigen::MatrixXd distances = x;
+        if (!precomputed)
+        {
+#pragma omp parallel for
+            for (Eigen::Index i = 0; i < x.rows(); i++)
+            {
+                distances.row(i) = (x.rowwise() - x.row(i)).rowwise().squaredNorm().transpose();
+            }
+        }
+
         auto probabilityDistribution = std::uniform_real_distribution();
         while (numberOfClusters > 0)
         {
             Eigen::Map<Eigen::VectorXi> eigenCandidates = Eigen::VectorXi::Map(candidates.data(), candidates.size());
 
-            // 2. For each data point x not chosen yet, compute D(x), the distance between x and the nearest center that has already been chosen.
-            Eigen::MatrixXd distances = x;
-            if (!precomputed)
-            {
-#pragma omp parallel for collapse(2)
-                for (Eigen::Index i = 0; i < x.rows(); i++)
-                {
-                    for (Eigen::Index j = 0; j < x.rows(); j++)
-                    {
-                        Eigen::RowVectorXd &&diff = x.row(i) - x.row(j);
-                        distances(i, j) = diff.dot(diff);
-                    }
-                }
-            }
-
-            // 3. Choose one new data point at random as a new center, using a weighted probability distribution where a point x is chosen.
+            // 3. Choose one new data point at random as a new center, using a weighted probability distribution where a point x is chosen with probability proportional to D(x)^2.
             Eigen::VectorXd weights = distances(Eigen::all, eigenCandidates).rowwise().minCoeff();
             weights /= weights.sum();
 
@@ -72,7 +68,7 @@ namespace mlhw6
 
 #pragma region BaseKMeans
 
-    BaseKMeans::BaseKMeans(int numberOfClusters, int maximumEpochs, double minimumTolerance, int seed, KMeansInitMethods init) : numberOfClusters(numberOfClusters), maximumEpochs(maximumEpochs), minimumTolerance(minimumTolerance), seed(seed)
+    BaseKMeans::BaseKMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : numberOfClusters(numberOfClusters), maximumEpochs(maximumEpochs), seed(seed)
     {
         if (!numberOfClusters > 0)
         {
@@ -80,13 +76,13 @@ namespace mlhw6
         }
     }
 
-    Eigen::VectorXd BaseKMeans::fitAndPredict(const Eigen::Ref<const Eigen::MatrixXd> &x)
+    Eigen::VectorXi BaseKMeans::fitAndPredict(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
         this->fit(x);
-        return this->predict(x);
+        return this->fittingHistory.back();
     }
 
-    std::vector<Eigen::VectorXd> BaseKMeans::getFittingHistory() const
+    std::vector<Eigen::VectorXi> BaseKMeans::getFittingHistory() const
     {
         return this->fittingHistory;
     }
@@ -115,34 +111,86 @@ namespace mlhw6
 #pragma endregion
 #pragma region KMeans
 
-    KMeans::KMeans(int numberOfClusters, int maximumEpochs, double minimumTolerance, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, minimumTolerance, seed, init)
+    KMeans::KMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, seed, init)
     {
     }
 
     void KMeans::fit(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
+        this->fittingHistory = std::vector<Eigen::VectorXi>{Eigen::VectorXi::Zero(x.rows())};
+
         auto centers = this->initializeCenters(x, this->init, this->seed);
+        this->centers = x(centers, Eigen::all);
+
+        int epoch = 0;
+        bool sameLabels = false;
+        do
+        {
+            // E step
+            this->fittingHistory.push_back(this->assignLabels(x));
+
+            // M step
+#pragma omp parallel for
+            for (int k = 0; k < this->numberOfClusters; k++)
+            {
+                Eigen::VectorXd selector = (this->fittingHistory.back().array() == k).cast<double>();
+                // calculate center
+                this->centers.row(k) = (selector.asDiagonal() * x).colwise().sum() / selector.sum();
+            }
+
+            sameLabels = (this->fittingHistory[epoch].array() == this->fittingHistory[epoch + 1].array()).all();
+            epoch++;
+        } while (!sameLabels && epoch < this->maximumEpochs);
     }
 
-    Eigen::VectorXd KMeans::predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const
+    Eigen::VectorXi KMeans::predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const
     {
+        return this->assignLabels(x);
+    }
+
+    Eigen::VectorXi KMeans::assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const
+    {
+        std::vector<int> labels(x.rows());
+#pragma omp parallel for
+        for (Eigen::Index i = 0; i < x.rows(); i++)
+        {
+            int index;
+            // find nearest neighbor
+            (this->centers.rowwise() - x.row(i)).rowwise().squaredNorm().minCoeff(&index);
+            labels[i] = index;
+        }
+        return Eigen::VectorXi::Map(labels.data(), labels.size());
     }
 
 #pragma endregion
 #pragma region KernelKMeans
 
-    KernelKMeans::KernelKMeans(int numberOfClusters, int maximumEpochs, double minimumTolerance, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, minimumTolerance, seed, init)
+    KernelKMeans::KernelKMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, seed, init)
     {
     }
 
     void KernelKMeans::fit(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
         // x is similarity matrix (gram matrix)
-        auto centers = this->initializeCenters(x, this->init, this->seed, true);
+        auto centers = this->initializeCenters(1 - x.array(), this->init, this->seed, true);
     }
 
-    Eigen::VectorXd KernelKMeans::predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const
+    Eigen::VectorXi KernelKMeans::predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const
     {
+    }
+
+    Eigen::VectorXi KernelKMeans::assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const
+    {
+        std::vector<int> labels(x.rows());
+#pragma omp parallel for
+        for (Eigen::Index i = 0; i < x.rows(); i++)
+        {
+            int index;
+            // find nearest neighbor
+            (this->centers.rowwise() - x.row(i)).rowwise().squaredNorm().minCoeff(&index);
+            labels[i] = index;
+        }
+        return Eigen::VectorXi::Map(labels.data(), labels.size());
     }
 
 #pragma endregion

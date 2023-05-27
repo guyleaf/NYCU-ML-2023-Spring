@@ -10,14 +10,10 @@ namespace mlhw6
     Out rbf(const Eigen::MatrixBase<DerivedA> &x1, const Eigen::MatrixBase<DerivedB> &x2, double gamma)
     {
         Out result(x1.rows(), x2.rows());
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for
         for (Eigen::Index i = 0; i < x1.rows(); i++)
         {
-            for (Eigen::Index j = 0; j < x2.rows(); j++)
-            {
-                Eigen::RowVectorXd &&diff = x1.row(i) - x2.row(j);
-                result(i, j) = std::exp(-gamma * diff.dot(diff));
-            }
+            result.row(i) = (-gamma * (x2.rowwise() - x1.row(i)).rowwise().squaredNorm().transpose()).array().exp();
         }
         return result;
     }

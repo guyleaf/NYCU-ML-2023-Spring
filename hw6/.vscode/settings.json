@@ -71,6 +71,7 @@
         "complex": "cpp",
         "set": "cpp",
         "unordered_set": "cpp",
-        "specialfunctions": "cpp"
+        "specialfunctions": "cpp",
+        "*.inc": "cpp"
     }
 }

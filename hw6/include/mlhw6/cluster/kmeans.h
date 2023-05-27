@@ -13,41 +13,45 @@ namespace mlhw6
     class BaseKMeans
     {
     public:
-        BaseKMeans(int numberOfClusters, int maximumEpochs, double minimumTolerance, int seed, KMeansInitMethods init);
+        BaseKMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init);
 
         virtual void fit(const Eigen::Ref<const Eigen::MatrixXd> &x) = 0;
-        virtual Eigen::VectorXd predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const = 0;
-        virtual Eigen::VectorXd fitAndPredict(const Eigen::Ref<const Eigen::MatrixXd> &x);
+        virtual Eigen::VectorXi predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const = 0;
+        virtual Eigen::VectorXi fitAndPredict(const Eigen::Ref<const Eigen::MatrixXd> &x);
 
-        std::vector<Eigen::VectorXd> getFittingHistory() const;
+        std::vector<Eigen::VectorXi> getFittingHistory() const;
 
     protected:
         Eigen::VectorXi initializeCenters(const Eigen::Ref<const Eigen::MatrixXd> &x, KMeansInitMethods init, int seed, bool precomputed = false) const;
 
         int numberOfClusters;
         int maximumEpochs;
-        double minimumTolerance;
         int seed;
         KMeansInitMethods init;
 
-        std::vector<Eigen::VectorXd> fittingHistory;
+        std::vector<Eigen::VectorXi> fittingHistory;
     };
 
     class KMeans : public virtual BaseKMeans
     {
     public:
-        KMeans(int numberOfClusters, int maximumEpochs = 200, double minimumTolerance = 1e-4, int seed = 1234, KMeansInitMethods init = KMeansInitMethods::Kmeansplusplus);
+        KMeans(int numberOfClusters, int maximumEpochs = 200, int seed = 1234, KMeansInitMethods init = KMeansInitMethods::Kmeansplusplus);
         
         void fit(const Eigen::Ref<const Eigen::MatrixXd> &x) override;
-        Eigen::VectorXd predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const override;
+        Eigen::VectorXi predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const override;
+    private:
+        Eigen::VectorXi assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const;
+        Eigen::MatrixXd centers;
     };
 
     class KernelKMeans : public virtual BaseKMeans
     {
     public:
-        KernelKMeans(int numberOfClusters, int maximumEpochs = 200, double minimumTolerance = 1e-4, int seed = 1234, KMeansInitMethods init = KMeansInitMethods::Kmeansplusplus);
+        KernelKMeans(int numberOfClusters, int maximumEpochs = 200, int seed = 1234, KMeansInitMethods init = KMeansInitMethods::Kmeansplusplus);
 
         void fit(const Eigen::Ref<const Eigen::MatrixXd> &x) override;
-        Eigen::VectorXd predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const override;
+        Eigen::VectorXi predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const override;
+    private:
+        Eigen::VectorXi assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const;
     };
 }
