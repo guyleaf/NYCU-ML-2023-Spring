@@ -37,8 +37,8 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-add_subdirectory(src)
 add_subdirectory(thirdparty)
+add_subdirectory(src)
 
 add_library(common INTERFACE)
 target_compile_features(common INTERFACE cxx_std_20)

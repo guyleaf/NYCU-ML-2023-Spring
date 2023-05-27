@@ -6,13 +6,6 @@
 
 namespace mlhw6
 {
-    template <typename DerivedA, typename DerivedB>
-    double rbf(const Eigen::MatrixBase<DerivedA> &x1, const Eigen::MatrixBase<DerivedB> &x2, double gamma)
-    {
-        Eigen::VectorX<typename DerivedA::Scalar> diff = x1 - x2;
-        return std::exp(-gamma * diff.dot(diff));
-    }
-
     template <typename DerivedA, typename DerivedB, typename Out = Eigen::Matrix<double, DerivedA::RowsAtCompileTime, DerivedB::RowsAtCompileTime>>
     Out rbf(const Eigen::MatrixBase<DerivedA> &x1, const Eigen::MatrixBase<DerivedB> &x2, double gamma)
     {
@@ -22,7 +15,8 @@ namespace mlhw6
         {
             for (Eigen::Index j = 0; j < x2.rows(); j++)
             {
-                result(i, j) = rbf(x1.row(i).transpose(), x2.row(j).transpose(), gamma);
+                Eigen::RowVectorXd &&diff = x1.row(i) - x2.row(j);
+                result(i, j) = std::exp(-gamma * diff.dot(diff));
             }
         }
         return result;
