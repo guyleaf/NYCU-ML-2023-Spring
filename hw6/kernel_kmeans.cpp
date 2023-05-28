@@ -1,40 +1,35 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <list>
 #include <utility>
+#include <random>
 
-#include <Magick++.h>
 #include <Eigen/Dense>
-#include <optim.hpp>
-#include <autodiff/forward/real.hpp>
-#include <autodiff/forward/real/eigen.hpp>
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/core/eigen.hpp>
+
 #include <boost/filesystem.hpp>
 #include <omp.h>
 
 #include <mlhw6/kernel.hpp>
+#include <mlhw6/cluster.h>
 
 namespace fs = boost::filesystem;
 
 const std::string IMAGE_FILES[] = {"image1.png", "image2.png"};
 
-enum InitMethod
-{
-    Random,
-    Kmeansplusplus,
-};
-
 #pragma region Data processing
 
-std::pair<Eigen::MatrixX3d, Eigen::MatrixX2i> preprocess(Magick::Image &image)
+std::pair<Eigen::MatrixX3d, Eigen::MatrixX2i> preprocess(const cv::Mat &image)
 {
-    auto rows = image.rows();
-    auto columns = image.columns();
+    auto rows = image.rows;
+    auto columns = image.cols;
     auto size = rows * columns;
 
-    std::vector<unsigned char> tmp(size * 3);
-    image.writePixels(Magick::QuantumType::RGBQuantum, tmp.data());
-    std::vector<double> pixels(size * 3);
-    std::move(tmp.begin(), tmp.end(), pixels.begin());
+    cv::Mat rgb;
+    cv::cvtColor(image, rgb, cv::COLOR_BGR2RGB);
 
     std::vector<int> coordinates(size * 2);
 #pragma omp parallel for collapse(2)
@@ -48,11 +43,11 @@ std::pair<Eigen::MatrixX3d, Eigen::MatrixX2i> preprocess(Magick::Image &image)
         }
     }
 
-    using MatrixX3dRowMajor = Eigen::Matrix<double, Eigen::Dynamic, 3, Eigen::RowMajor>;
+    using MatrixX3ucRowMajor = Eigen::Matrix<unsigned char, Eigen::Dynamic, 3, Eigen::RowMajor>;
     using MatrixX2iRowMajor = Eigen::Matrix<int, Eigen::Dynamic, 2, Eigen::RowMajor>;
 
     return std::make_pair<Eigen::MatrixX3d, Eigen::MatrixX2i>(
-        MatrixX3dRowMajor::Map(pixels.data(), size, 3), MatrixX2iRowMajor::Map(coordinates.data(), size, 2));
+        MatrixX3ucRowMajor::Map(rgb.data, size, 3).cast<double>(), MatrixX2iRowMajor::Map(coordinates.data(), size, 2));
 }
 
 #pragma endregion
@@ -67,21 +62,73 @@ Eigen::MatrixXd calculateKernel(const Eigen::MatrixX3d &pixels, const Eigen::Mat
     return colorKernel.cwiseProduct(coordinateKernel);
 }
 
-void run(const fs::path &path, int k, InitMethod init, double gamma1, double gamma2)
+cv::Mat drawMask(const Eigen::VectorXi &labels, int numberOfClusters, unsigned int width, unsigned int height)
 {
-    Magick::InitializeMagick(nullptr);
-    Magick::Image image;
+    Eigen::VectorX<unsigned char> maskData = labels.cast<unsigned char>();
+    cv::Mat mask = cv::Mat(cv::Size(width, height), CV_8UC1, reinterpret_cast<void *>(maskData.data()));
+
+    mask *= (255 / numberOfClusters);
+
+    cv::Mat bgrMask;
+    cv::cvtColor(mask, bgrMask, cv::COLOR_GRAY2BGR);
+    cv::applyColorMap(bgrMask, bgrMask, cv::COLORMAP_COOL);
+    return bgrMask;
+}
+
+void run(const fs::path &path, int numberOfClusters, mlhw6::KMeansInitMethods init, double gamma1, double gamma2)
+{
+    int fps = 30;
+    int codec = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
+    cv::VideoWriter writer;
+
+    mlhw6::KernelKMeans kernelKMeans(numberOfClusters, 200, 1234, init);
 
     for (auto imageFile : IMAGE_FILES)
     {
+        std::cout << imageFile << std::endl;
+
+        auto fileName = (path / imageFile).generic_string();
+
         // read image
-        image.read((path / imageFile).generic_string());
+        auto image = cv::imread(fileName, cv::ImreadModes::IMREAD_COLOR);
 
         // extract RGB values and coordinates
         auto [pixels, coordinates] = preprocess(image);
 
         // calculate kernel
         auto kernel = calculateKernel(pixels, coordinates, gamma1, gamma2);
+
+        kernelKMeans.fit(kernel);
+        const std::vector<Eigen::VectorXi> &fittingHistory = kernelKMeans.getFittingHistory();
+
+        writer.open(imageFile + "_video.mp4", codec, fps, image.size());
+        // check if we succeeded
+        if (!writer.isOpened())
+        {
+            throw std::runtime_error("Could not open the output video file for write");
+        }
+
+        for (int i = 0; i < fps; i++)
+        {
+            writer.write(image);
+        }
+
+        cv::Mat result;
+        cv::Mat mask;
+        for (std::size_t i = 1; i < fittingHistory.size(); i++)
+        {
+            mask = drawMask(fittingHistory[i], numberOfClusters, image.cols, image.rows);
+            cv::addWeighted(image, 0.5, mask, 0.5, 0, result);
+            for (int i = 0; i < fps; i++)
+            {
+                writer.write(result);
+            }
+        }
+
+        writer.release();
+
+        cv::imwrite(imageFile + "_mask.png", mask);
+        cv::imwrite(imageFile + "_final.png", result);
     }
 }
 
@@ -102,8 +149,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    auto k = std::stoi(*argv);
-    if (!(k > 0))
+    argv++;
+
+    auto numberOfClusters = std::stoi(*argv);
+    if (!numberOfClusters > 0)
     {
         std::cerr << "The number of cluster should be larger than 0." << std::endl;
         return 1;
@@ -111,7 +160,7 @@ int main(int argc, char *argv[])
 
     argv++;
 
-    auto init = static_cast<InitMethod>(std::stoi(*argv));
+    auto init = static_cast<mlhw6::KMeansInitMethods>(std::stoi(*argv));
 
     argv++;
 
@@ -121,7 +170,7 @@ int main(int argc, char *argv[])
 
     auto gamma2 = std::stod(*argv);
 
-    run(path, k, init, gamma1, gamma2);
+    run(path, numberOfClusters, init, gamma1, gamma2);
 
     return 0;
 }

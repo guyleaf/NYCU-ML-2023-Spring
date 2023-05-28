@@ -4,38 +4,26 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "launch Part 1",
+            "label": "launch kernel kmeans",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
-            "args": ["./data", "1", ">", "output_task_1.log"],
+            "args": ["${cwd}/data", "3", "1", "0.00001", "0.00001", ">", "output.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
-                    "OMP_NUM_THREADS": "15"
+                    "OMP_NUM_THREADS": "16"
                 }
             }
         },
         {
-            "label": "launch Part 2",
+            "label": "launch spectral clustering",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
             "args": ["./data", "2", ">", "output_task_2.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
-                    "ASAN_OPTIONS": ""
-                }
-            }
-        },
-        {
-            "label": "launch Part 3",
-            "type": "shell",
-            "command": "${command:cmake.launchTargetPath}",
-            "args": ["./data", "3", ">", "output_task_3.log"],
-            "options": {
-                "cwd": "${workspaceFolder}/build",
-                "env": {
-                    "ASAN_OPTIONS": ""
+                    "OMP_NUM_THREADS": "16"
                 }
             }
         }

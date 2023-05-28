@@ -19,7 +19,7 @@ namespace mlhw6
         virtual Eigen::VectorXi predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const = 0;
         virtual Eigen::VectorXi fitAndPredict(const Eigen::Ref<const Eigen::MatrixXd> &x);
 
-        std::vector<Eigen::VectorXi> getFittingHistory() const;
+        const std::vector<Eigen::VectorXi>& getFittingHistory() const;
 
     protected:
         Eigen::VectorXi initializeCenters(const Eigen::Ref<const Eigen::MatrixXd> &x, KMeansInitMethods init, int seed, bool precomputed = false) const;
