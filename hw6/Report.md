@@ -15,8 +15,8 @@
 Used library => Corresponding library in homework description
 
 * Eigen => numpy
-* OpenCV => visualization
-* Boost (for access file system only)
+* OpenCV, matplotlib++ => visualization
+* Boost => filesystem, sort
 * OpenMP (for parallel acceleration)
 
 ### Visualization
@@ -71,7 +71,7 @@ Used library => Corresponding library in homework description
 
     > Follow the scikit-learn logic design.
 
-    ![image-20230529093852567](assets/image-20230529093852567.png)
+    ![image-20230529214841312](assets/image-20230529214841312.png)
 
   * `KernelKMeans` constructor
 
@@ -119,7 +119,7 @@ Used library => Corresponding library in homework description
 
   * `kernelKMeans.fit` function: fit the data
 
-    > Previously, we already calculated the kernel first.
+    > Previously, we already calculated the kernel.
     >
     > So, we use the precomputed kernel values directly.
     >
@@ -139,31 +139,6 @@ Used library => Corresponding library in homework description
 
     ![image-20230529094326970](assets/image-20230529094326970.png)
 
-  * `initializeCenters` function: pick k centers initialized by the selected method
-
-    > Arguments
-    > 	x: (N, N) precomputed distance matrix or (N, features) data
-    > 	init: the selected initialization method, random or k-means++
-    > 	seed: the random seed
-    > 	precomputed: x is the precomputed distance matrix or not.
-
-    ![image-20230529095022292](assets/image-20230529095022292.png)
-
-  * `randomInitialization` function: randomly pick k centers
-
-    > Arguments
-    > 	x: (N, N) precomputed distance matrix or (N, features) data
-    > 	numberOfClusters: k clusters
-    > 	seed: the random seed
-    >
-    > Steps
-    >
-    > 1. generate the sequence of indexes, 0 ~ N-1
-    > 2. shuffle the sequence
-    > 3. pick the top k rows as the centers
-
-    ![image-20230529095601278](assets/image-20230529095601278.png)
-
   * `assignLabels` function: calculate the cost and assign labels
 
     > Arguments
@@ -176,25 +151,186 @@ Used library => Corresponding library in homework description
     >    <img src="assets/image-20230529100229119.png" alt="image-20230529100229119" style="zoom:33%;" />
     >
     > 2. Assign the label which has the smallest distance to the data
-
+  
     ![image-20230529100108018](assets/image-20230529100108018.png)
-
+  
 * **Spectral Clustering**
 
-  * 
+  * Pseudo-code
+  
+    * Spectral Clustering (ratio cut)
+  
+      ![image-20230529213243217](assets/image-20230529213243217.png)
+  
+    * Normalized Spectral Clustering (normalized cut)
+  
+      ![image-20230529213252785](assets/image-20230529213252785.png)
+  
+  * Main function
+  
+    > Arguments
+    > 	path: the image data folder
+    > 	model: Spectral Clustering instance
+    > 	numberOfClusters: the number of clusters
+    > 	gamma1, gamma2: the hyper-parameter of RBF kernel
+  
+    ![image-20230529214724091](assets/image-20230529214724091.png)
+  
+    ![image-20230529212221143](assets/image-20230529212221143.png)
+  
+  * `spectral.h` header: spectral clustering related classes
+  
+    > Follow the scikit-learn logic design.
+  
+    ![image-20230529212357072](assets/image-20230529212357072.png)
+  
+  * `kmeans.h` header: k-means related classes
+  
+    > Follow the scikit-learn logic design.
+  
+    ![image-20230529214841312](assets/image-20230529214841312.png)
+  
+  * `preprocess` function: extract RGB values and coordinates
+  
+    > Arguments
+    > 	image: (H, W, 3), BGR values
+  
+    ![image-20230529092002708](assets/image-20230529092002708.png)
+  
+  * `calculateKernel` function: calculate all kernel values
+  
+    > Arguments
+    > 	pixels: (N, 3), RGB values
+    > 	coordinates: (N, 2), coordinates
+    > 	gamma1: $\gamma_c$ scalar
+    > 	gamma2: $\gamma_s$ scalar
+    >
+    > Formula
+    >
+    > <img src="assets/image-20230529092810965.png" alt="image-20230529092810965" style="zoom: 33%;" />
+    >
+    > $S(x)$ is the spatial information (coordinate)
+    >
+    > $C(x)$ is the color information (RGB)
+  
+    ![image-20230529092529881](assets/image-20230529092529881.png)
+  
+  * `rbf` function: RBF kernel
+  
+    > Arguments
+    > 	x1: $x$ vector
+    > 	x2: $x'$ vector
+    > 	gamma: $\gamma$ scalar
+    >
+    > Formula
+    >
+    > $k(x, x') = e^{-\gamma||x - x'||^2}$
+  
+    ![image-20230529092657176](assets/image-20230529092657176.png)
+  
+  * `model.fit` function: fit the data
+  
+    > Previously, we already calculated the kernel.
+    >
+    > So, we use the precomputed kernel values directly.
+    >
+    > Arguments
+    > 	x: (N, N), the kernel values (gram matrix, similarity matrix)
+  
+    * Spectral Clustering (ratio cut)
+  
+      > Algorithm
+      >
+      > ![image-20230529213243217](assets/image-20230529213243217.png)
+  
+      ![image-20230529213005382](assets/image-20230529213005382.png)
+  
+    * Normalized Spectral Clustering (normalized cut)
+  
+      > Algorithm
+      >
+      > ![image-20230529213252785](assets/image-20230529213252785.png)
+  
+      ![image-20230529213121395](assets/image-20230529213121395.png)
+  
+  * `kMeans.fit` function: fit the data
+  
+    > Use the points in eigen space to perform k-means clustering.
+    >
+    > Steps
+    >
+    > 1. Pick k centers
+    >
+    > 2. E step
+    >
+    >    1. Calculate the cost between the data and centers
+    >    2. Assign the label which has the smallest distance to the data
+    >
+    > 3. M step
+    >
+    >    Recalculate the centers by averaging the points which belong to the same cluster.
+    >
+    > 4. Keep repeating 2, 3 step until the labels are not changed
+  
+    ![image-20230529213450543](assets/image-20230529213450543.png)
+  
+  * `assignLabels` function: calculate the cost and assign labels
+  
+    > Arguments
+    > 	x: (N, N), the kernel values
+    >
+    > Steps
+    >
+    > 1. Calculate the cost (Euclidean distance) between the data and centers
+    >
+    > 2. Assign the label which has the smallest distance to the data
+  
+    ![image-20230529214334041](assets/image-20230529214334041.png)
 
 
 ### Part2
 
 > Use command to control the number of clusters and other parameters.
 
-![image-20230529100524496](assets/image-20230529100524496.png)
+* **Kernel K-Means**
 
-![image-20230529100644043](assets/image-20230529100644043.png)
+  > init
+  >
+  > 0 => use random initialization
+  >
+  > 1 => use k-means++ initialization
+
+  ![image-20230529100524496](assets/image-20230529100524496.png)
+
+* **Spectral Clustering**
+
+  > spectral clustering type
+  >
+  > 0 => use spectral clustering algorithm
+  >
+  > 1 => use normalized clustering algorithm
+  >
+  > init
+  >
+  > 0 => use random initialization
+  >
+  > 1 => use k-means++ initialization
+
+  ![image-20230529215138103](assets/image-20230529215138103.png)
 
 ### Part3
 
-* **Kernel K-Means**: K-Means++ initialization
+* `initializeCenters` function: pick k centers initialized by the selected method
+
+  > Arguments
+  > 	x: (N, N) precomputed distance matrix or (N, features) data
+  > 	init: the selected initialization method, random or k-means++
+  > 	seed: the random seed
+  > 	precomputed: x is the precomputed distance matrix or not.
+  
+  ![image-20230529095022292](assets/image-20230529095022292.png)
+  
+* **Random initialization**
 
   > Arguments
   > 	x: (N, N) precomputed distance matrix or (N, features) data
@@ -203,15 +339,32 @@ Used library => Corresponding library in homework description
   >
   > Steps
   >
-  > 	1. Choose one center uniformly at random among the data points.
-  > 	1. For each data point x not chosen yet, compute $D(x)^2$ (the squared Euclidean distance) or use the precomputed distance matrix, the distance between x and the nearest center that has already been chosen.
-  > 	1. Choose one new data point at random as a new center, using a weighted probability distribution where a point x is chosen with probability proportional to $D(x)^2$. (The farthest point will be chosen.)
+  > 1. generate the sequence of indexes, 0 ~ N-1
+  > 2. shuffle the sequence
+  > 3. pick the top k rows as the centers
+
+  ![image-20230529095601278](assets/image-20230529095601278.png)
+
+* **K-Means++ initialization**
+
+  > Arguments
+  > 	x: (N, N) precomputed distance matrix or (N, features) data
+  > 	numberOfClusters: k clusters
+  > 	seed: the random seed
+  >
+  > Steps
+  >
+  > 1. Choose one center uniformly at random among the data points.
+  > 1. For each data point x not chosen yet, compute $D(x)^2$ (the squared Euclidean distance) or use the precomputed distance matrix, the distance between x and the nearest center that has already been chosen.
+  > 1. Choose one new data point at random as a new center, using a weighted probability distribution where a point x is chosen with probability proportional to $D(x)^2$. (The farthest point will be chosen.)
 
   ![image-20230529100758527](assets/image-20230529100758527.png)
 
-* **Spectral Clustering**
-
 ### Part4
+
+> Visualize the eigen space.
+
+![image-20230529221044921](assets/image-20230529221044921.png)
 
 ## Experiments settings and results & Discussion
 
@@ -405,4 +558,3 @@ Used library => Corresponding library in homework description
 ## Observations and discussion
 
 * Coming soon...
-  
