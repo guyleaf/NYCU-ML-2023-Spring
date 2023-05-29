@@ -75,7 +75,7 @@ namespace mlhw6
 
 #pragma region BaseKMeans
 
-    BaseKMeans::BaseKMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : numberOfClusters(numberOfClusters), maximumEpochs(maximumEpochs), seed(seed), init(init)
+    BaseKMeans::BaseKMeans(int numberOfClusters, KMeansInitMethods init, int maximumEpochs, int seed) : numberOfClusters(numberOfClusters), maximumEpochs(maximumEpochs), seed(seed), init(init)
     {
         if (!numberOfClusters > 0)
         {
@@ -89,7 +89,7 @@ namespace mlhw6
         return this->fittingHistory.back();
     }
 
-    const std::vector<Eigen::VectorXi>& BaseKMeans::getFittingHistory() const
+    const std::vector<Eigen::VectorXi> &BaseKMeans::getFittingHistory() const
     {
         return this->fittingHistory;
     }
@@ -120,10 +120,6 @@ namespace mlhw6
 #pragma endregion
 #pragma region KMeans
 
-    KMeans::KMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, seed, init)
-    {
-    }
-
     void KMeans::fit(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
         this->fittingHistory = std::vector<Eigen::VectorXi>{Eigen::VectorXi::Constant(x.rows(), -1)};
@@ -136,6 +132,8 @@ namespace mlhw6
         bool sameLabels = false;
         do
         {
+            std::cout << "Epoch: " << epoch << std::endl;
+
             // E step
             this->fittingHistory.push_back(this->assignLabels(x));
 
@@ -173,10 +171,6 @@ namespace mlhw6
 #pragma endregion
 #pragma region KernelKMeans
 
-    KernelKMeans::KernelKMeans(int numberOfClusters, int maximumEpochs, int seed, KMeansInitMethods init) : BaseKMeans(numberOfClusters, maximumEpochs, seed, init)
-    {
-    }
-
     void KernelKMeans::fit(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
         this->fittingHistory = std::vector<Eigen::VectorXi>{Eigen::VectorXi::Constant(x.rows(), -1)};
@@ -189,12 +183,14 @@ namespace mlhw6
         bool sameLabels = false;
         do
         {
+            std::cout << "Epoch: " << epoch << std::endl;
+
             this->fittingHistory.push_back(this->assignLabels(x));
 
             sameLabels = (this->fittingHistory[epoch].array() == this->fittingHistory[epoch + 1].array()).all();
             epoch++;
         } while (!sameLabels && epoch < this->maximumEpochs);
-    
+
         std::cout << "Finished at " << epoch << " epoch" << std::endl;
     }
 

@@ -29,7 +29,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}",
-            "args": ["${cwd}/data", "3", "1", "0.00001", "0.00001", ">", "output.log"],
+            "args": ["${cwd}/data", "2", "0", "0", "0.00001", "0.00001", ">", "output.log"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build",
             "environment": [
