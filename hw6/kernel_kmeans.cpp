@@ -81,7 +81,7 @@ void run(const fs::path &path, int numberOfClusters, mlhw6::KMeansInitMethods in
     int codec = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
     cv::VideoWriter writer;
 
-    mlhw6::KernelKMeans kernelKMeans(numberOfClusters, 200, 1234, init);
+    mlhw6::KernelKMeans kernelKMeans(numberOfClusters, init);
 
     for (auto imageFile : IMAGE_FILES)
     {

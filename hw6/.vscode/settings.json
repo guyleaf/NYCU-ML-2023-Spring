@@ -73,6 +73,9 @@
         "unordered_set": "cpp",
         "specialfunctions": "cpp",
         "*.inc": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "cholesky": "cpp",
+        "eigenvalues": "cpp",
+        "future": "cpp"
     }
 }
