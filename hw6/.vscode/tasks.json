@@ -7,7 +7,7 @@
             "label": "launch kernel kmeans",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
-            "args": ["${cwd}/data", "3", "1", "0.00001", "0.00001", ">", "output.log"],
+            "args": ["${cwd}/data", "4", "1", "0.00001", "0.00001", ">", "output.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {
@@ -19,7 +19,7 @@
             "label": "launch spectral clustering",
             "type": "shell",
             "command": "${command:cmake.launchTargetPath}",
-            "args": ["./data", "2", ">", "output_task_2.log"],
+            "args": ["${cwd}/data", "3", "1", "0.00001", "0.00001", ">", "output.log"],
             "options": {
                 "cwd": "${workspaceFolder}/build",
                 "env": {

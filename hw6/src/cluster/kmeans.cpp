@@ -107,8 +107,10 @@ namespace mlhw6
         switch (init)
         {
         case KMeansInitMethods::Random:
+            std::cout << "Use random initialization." << std::endl;
             return randomInitialization(x, this->numberOfClusters, seed);
         case KMeansInitMethods::Kmeansplusplus:
+            std::cout << "Use K-Means++ initialization." << std::endl;
             return kMeansPlusPlusInitialization(x, this->numberOfClusters, seed, precomputed);
         default:
             throw std::runtime_error("The initialization method is not supported.");
