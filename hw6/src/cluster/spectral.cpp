@@ -1,5 +1,6 @@
 #include <mlhw6/cluster/spectral.h>
 #include <iostream>
+#include <ranges>
 #include <algorithm>
 #include <complex>
 #include <utility>
@@ -42,6 +43,11 @@ namespace mlhw6
         return this->eigenMatrix;
     }
 
+    const Eigen::MatrixXd &BaseSpectralClustering::getEigenCenters() const
+    {
+        return this->kMeans.getCenters();
+    }
+
 #pragma endregion
 #pragma region SpectralClustering
 
@@ -58,9 +64,6 @@ namespace mlhw6
         const Eigen::VectorXcd &eigenValues = solver.eigenvalues();
         const Eigen::MatrixXcd &eigenVectors = solver.eigenvectors();
 
-        std::cout << eigenValues.topRows(5) << std::endl;
-        std::cout << eigenVectors.leftCols(5) << std::endl;
-
         // sort eigenvalues
         std::vector<std::pair<double, Eigen::Index>> eigenPairs(eigenValues.rows());
 #pragma omp parallel for
@@ -69,7 +72,10 @@ namespace mlhw6
             eigenPairs[i] = std::make_pair(eigenValues[i].real(), i);
         }
         boost::sort::parallel_stable_sort(eigenPairs.begin(), eigenPairs.end(), this->numberOfThreads);
-        // std::partial_sort(eigenPairs.begin(), eigenPairs.begin() + this->numberOfClusters, eigenPairs.end());
+        // std::ranges::partial_sort(eigenPairs.begin(), eigenPairs.begin() + this->numberOfClusters, eigenPairs.end());
+
+        // remove the first eigenvector (0 eigenvalue)
+        eigenPairs.erase(eigenPairs.begin());
 
         // pick k eigenvectors
         this->eigenMatrix = Eigen::MatrixXd(eigenVectors.rows(), this->numberOfClusters);
@@ -88,37 +94,41 @@ namespace mlhw6
 
     void NormalizedSpectralClustering::fit(const Eigen::Ref<const Eigen::MatrixXd> &x)
     {
-        Eigen::DiagonalMatrix<double, Eigen::Dynamic> degreeMatrix = x.rowwise().sum().asDiagonal();
+        // D^(-1/2)
+        Eigen::VectorXd inversedSqrtDegreeVector = x.rowwise().sum().array().sqrt().inverse();
 
-        // L = D - W
-        Eigen::MatrixXd laplacianMatrix = -x;
-        laplacianMatrix.diagonal() += degreeMatrix.diagonal();
+        // L = I - D^(-1/2) * W * D^(-1/2)
+        Eigen::MatrixXd laplacianMatrix = Eigen::MatrixXd::Identity(inversedSqrtDegreeVector.rows(), inversedSqrtDegreeVector.rows());
+        laplacianMatrix -= inversedSqrtDegreeVector.asDiagonal() * x * inversedSqrtDegreeVector.asDiagonal();
 
-        // solve generalized eigen decomposition
-        Eigen::GeneralizedEigenSolver<Eigen::MatrixXd> solver(laplacianMatrix, degreeMatrix, true);
-        const Eigen::VectorXcd &eigenValues = solver.eigenvalues();
-        const Eigen::MatrixXcd &eigenVectors = solver.eigenvectors();
-
-        std::cout << eigenValues.topRows(5) << std::endl;
-        std::cout << eigenVectors.leftCols(5) << std::endl;
+        // solve eigen decomposition
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(laplacianMatrix, Eigen::ComputeEigenvectors);
+        const Eigen::VectorXd &eigenValues = solver.eigenvalues();
+        const Eigen::MatrixXd &eigenVectors = solver.eigenvectors();
 
         // sort eigenvalues
         std::vector<std::pair<double, Eigen::Index>> eigenPairs(eigenValues.rows());
 #pragma omp parallel for
         for (Eigen::Index i = 0; i < eigenValues.rows(); i++)
         {
-            eigenPairs[i] = std::make_pair(eigenValues[i].real(), i);
+            eigenPairs[i] = std::make_pair(eigenValues[i], i);
         }
         boost::sort::parallel_stable_sort(eigenPairs.begin(), eigenPairs.end(), this->numberOfThreads);
-        // std::partial_sort(eigenPairs.begin(), eigenPairs.begin() + this->numberOfClusters, eigenPairs.end());
+        // std::ranges::partial_sort(eigenPairs.begin(), eigenPairs.begin() + this->numberOfClusters, eigenPairs.end());
+
+        // remove the first eigenvector (0 eigenvalue)
+        eigenPairs.erase(eigenPairs.begin());
 
         // pick k eigenvectors
         this->eigenMatrix = Eigen::MatrixXd(eigenVectors.rows(), this->numberOfClusters);
 #pragma omp parallel for
         for (int i = 0; i < this->numberOfClusters; i++)
         {
-            this->eigenMatrix.col(i) = eigenVectors.col(eigenPairs[i].second).real();
+            this->eigenMatrix.col(i) = eigenVectors.col(eigenPairs[i].second);
         }
+
+        // normalize the eigenvectors
+        this->eigenMatrix.rowwise().normalize();
 
         // perform k-means clustering on eigen space
         this->kMeans.fit(this->eigenMatrix);

@@ -1,6 +1,5 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
     "files.associations": {
         "cctype": "cpp",
         "clocale": "cpp",
@@ -76,6 +75,10 @@
         "iomanip": "cpp",
         "cholesky": "cpp",
         "eigenvalues": "cpp",
-        "future": "cpp"
-    }
+        "future": "cpp",
+        "bitset": "cpp",
+        "codecvt": "cpp",
+        "typeindex": "cpp"
+    },
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

@@ -124,9 +124,9 @@ namespace mlhw6
     {
         this->fittingHistory = std::vector<Eigen::VectorXi>{Eigen::VectorXi::Constant(x.rows(), -1)};
 
-        auto centers = this->initializeCenters(x, this->init, this->seed);
-        this->fittingHistory.back()(centers).setLinSpaced(0, this->numberOfClusters - 1);
-        this->centers = x(centers, Eigen::all);
+        auto centersIndices = this->initializeCenters(x, this->init, this->seed);
+        this->fittingHistory.back()(centersIndices).setLinSpaced(0, this->numberOfClusters - 1);
+        this->centers = x(centersIndices, Eigen::all);
 
         int epoch = 0;
         bool sameLabels = false;
@@ -149,11 +149,18 @@ namespace mlhw6
             sameLabels = (this->fittingHistory[epoch].array() == this->fittingHistory[epoch + 1].array()).all();
             epoch++;
         } while (!sameLabels && epoch < this->maximumEpochs);
+
+        std::cout << "Finished at " << epoch << " epoch" << std::endl;
     }
 
     Eigen::VectorXi KMeans::predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const
     {
         return this->assignLabels(x);
+    }
+
+    const Eigen::MatrixXd &KMeans::getCenters() const
+    {
+        return this->centers;
     }
 
     Eigen::VectorXi KMeans::assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const

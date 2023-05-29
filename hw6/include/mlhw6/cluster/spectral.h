@@ -16,6 +16,7 @@ namespace mlhw6
 
         const std::vector<Eigen::VectorXi> &getFittingHistory() const;
         const Eigen::MatrixXd &getEigenMatrix() const;
+        const Eigen::MatrixXd &getEigenCenters() const;
 
     protected:
         KMeans kMeans;

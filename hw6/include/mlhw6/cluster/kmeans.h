@@ -39,6 +39,7 @@ namespace mlhw6
 
         void fit(const Eigen::Ref<const Eigen::MatrixXd> &x) override;
         Eigen::VectorXi predict(const Eigen::Ref<const Eigen::MatrixXd> &x) const override;
+        const Eigen::MatrixXd &getCenters() const;
 
     private:
         Eigen::VectorXi assignLabels(const Eigen::Ref<const Eigen::MatrixXd> &x) const;

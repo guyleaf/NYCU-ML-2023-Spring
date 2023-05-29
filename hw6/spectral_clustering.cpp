@@ -4,6 +4,7 @@
 #include <list>
 #include <utility>
 #include <random>
+#include <algorithm>
 
 #include <Eigen/Dense>
 
@@ -82,17 +83,62 @@ cv::Mat drawMask(const Eigen::VectorXi &labels, int numberOfClusters, unsigned i
     return bgrMask;
 }
 
-void plotEigenSpace(const std::string &path, const Eigen::MatrixXd &eigenMatrix)
+void plotEigen2DSpace(const std::string &path, const Eigen::MatrixXd &centers, const Eigen::MatrixXd &matrix, const Eigen::VectorXi &labels)
 {
-    matplot::figure();
+    auto figure = matplot::figure(true);
+    auto numberOfClusters = centers.rows();
+    auto numberOfPoints = matrix.rows();
+    auto size = numberOfClusters + numberOfPoints;
 
-    const Eigen::VectorXd &vecX = eigenMatrix.col(0);
-    const Eigen::VectorXd &vecY = eigenMatrix.col(1);
+    Eigen::VectorXd vecX(size);
+    vecX << matrix.col(0), centers.col(0);
+
+    Eigen::VectorXd vecY(size);
+    vecY << matrix.col(1), centers.col(1);
+
+    using VectorXl = Eigen::VectorX<long>;
+    VectorXl vecL(size);
+    vecL << labels.cast<long>(), VectorXl::Constant(numberOfClusters, numberOfClusters + 1);
 
     std::vector<double> x(vecX.begin(), vecX.end());
     std::vector<double> y(vecY.begin(), vecY.end());
-    matplot::scatter(x, y);
-    matplot::save(path);
+    std::vector<double> color(vecL.begin(), vecL.end());
+    auto l = figure->add_axes()->scatter(x, y, {}, color);
+    l->marker_color({0.f, .5f, .5f});
+    l->marker_face_color({0.f, .7f, .7f});
+
+    matplot::save(figure, path);
+}
+
+void plotEigen3DSpace(const std::string &path, const Eigen::MatrixXd &centers, const Eigen::MatrixXd &matrix, const Eigen::VectorXi &labels)
+{
+    auto figure = matplot::figure(true);
+    auto numberOfClusters = centers.rows();
+    auto numberOfPoints = matrix.rows();
+    auto size = numberOfClusters + numberOfPoints;
+
+    Eigen::VectorXd vecX(size);
+    vecX << matrix.col(0), centers.col(0);
+
+    Eigen::VectorXd vecY(size);
+    vecY << matrix.col(1), centers.col(1);
+
+    Eigen::VectorXd vecZ(size);
+    vecY << matrix.col(2), centers.col(2);
+
+    using VectorXl = Eigen::VectorX<long>;
+    VectorXl vecL(size);
+    vecL << labels.cast<long>(), VectorXl::Constant(numberOfClusters, numberOfClusters + 1);
+
+    std::vector<double> x(vecX.begin(), vecX.end());
+    std::vector<double> y(vecY.begin(), vecY.end());
+    std::vector<double> z(vecZ.begin(), vecZ.end());
+    std::vector<double> color(vecL.begin(), vecL.end());
+    auto l = figure->add_axes()->scatter3(x, y, z, {}, color);
+    l->marker_color({0.f, .5f, .5f});
+    l->marker_face_color({0.f, .7f, .7f});
+
+    matplot::save(figure, path);
 }
 
 void run(const fs::path &path, mlhw6::BaseSpectralClustering &model, int numberOfClusters, double gamma1, double gamma2)
@@ -100,6 +146,11 @@ void run(const fs::path &path, mlhw6::BaseSpectralClustering &model, int numberO
     int fps = 30;
     int codec = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
     cv::VideoWriter writer;
+
+    // bug: create a figure first.
+    // auto fig = matplot::figure(true);
+    // fig->current_axes()->scatter({0, 1}, {0, 1}, {0, 1});
+    // matplot::save(fig, "/tmp/tmp.jpg");
 
     for (auto imageFile : IMAGE_FILES)
     {
@@ -118,8 +169,19 @@ void run(const fs::path &path, mlhw6::BaseSpectralClustering &model, int numberO
 
         model.fit(kernel);
         const std::vector<Eigen::VectorXi> &fittingHistory = model.getFittingHistory();
+        const Eigen::MatrixXd &eigenMatrix = model.getEigenMatrix();
+        const Eigen::MatrixXd &eigenCenters = model.getEigenCenters();
 
-        plotEigenSpace(imageFile + "_eigen.jpg", model.getEigenMatrix());
+        std::cout << eigenCenters << std::endl;
+
+        if (numberOfClusters >= 3)
+        {
+            plotEigen3DSpace(imageFile + "_eigen.png", eigenCenters, eigenMatrix, fittingHistory.back());
+        }
+        else if (numberOfClusters == 2)
+        {
+            plotEigen2DSpace(imageFile + "_eigen.png", eigenCenters, eigenMatrix, fittingHistory.back());
+        }
 
         writer.open(imageFile + "_video.mp4", codec, fps, image.size());
         // check if we succeeded
