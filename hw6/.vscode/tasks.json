@@ -1,0 +1,31 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "launch kernel kmeans",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "args": ["${cwd}/data", "4", "1", "0.00001", "0.00001", ">", "output.log"],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "OMP_NUM_THREADS": "12"
+                }
+            }
+        },
+        {
+            "label": "launch spectral clustering",
+            "type": "shell",
+            "command": "${command:cmake.launchTargetPath}",
+            "args": ["${cwd}/data", "4", "1", "1", "0.00001", "0.00001", ">", "output.log"],
+            "options": {
+                "cwd": "${workspaceFolder}/build",
+                "env": {
+                    "OMP_NUM_THREADS": "12"
+                }
+            }
+        }
+    ]
+}
