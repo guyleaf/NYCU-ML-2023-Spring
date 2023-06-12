@@ -161,7 +161,7 @@ if __name__ == "__main__":
     data = preprocess(data, data, args.kernel)
 
     pca_weights = np.load(args.eigen_path)
-    # fisher_weights = np.load(args.fisher_path)
+    fisher_weights = np.load(args.fisher_path)
 
     if args.kernel != "none":
         visualize_kernel_faces(
@@ -180,4 +180,14 @@ if __name__ == "__main__":
             num_eigenfaces=args.num_eigenfaces,
             num_reconstructed_faces=args.num_reconstructed_faces,
             file_name="eigenfaces.jpg",
+        )
+
+        visualize_faces(
+            args.out_dir,
+            data,
+            fisher_weights,
+            width,
+            num_eigenfaces=args.num_eigenfaces,
+            num_reconstructed_faces=args.num_reconstructed_faces,
+            file_name="fisherfaces.jpg",
         )
