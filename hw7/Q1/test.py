@@ -239,13 +239,3 @@ if __name__ == "__main__":
             args.k_neighbors,
             args.kernel,
         )
-
-        visualize_faces(
-            args.out_dir,
-            data,
-            fisher_weights,
-            width,
-            num_eigenfaces=args.num_eigenfaces,
-            num_reconstructed_faces=args.num_reconstructed_faces,
-            file_name="fisherfaces.jpg",
-        )
