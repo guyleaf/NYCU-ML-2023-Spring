@@ -218,7 +218,13 @@
   > 	test_data: np.ndarray, shape (N, D), test data samples
   > 	weights: PCA or LDA weights, shape (D, E)
   > 	k_neighbors: int, k-NN
-
+  >
+  > 
+  >
+  > To project the data onto low dimensional space,
+  >
+  > $Z = XW$
+  
   ![image-20230614175944578](assets/test_classify.png)
 
 #### Part3
@@ -383,7 +389,7 @@
   >
   > 
   >
-  > Before classifying the test data, we have to calculate kernel matrix.
+  > Before classifying the test data, we have to calculate kernel matrix $K(X, X)$ and $K(X_{new}, X)$.
 
   ![image-20230615224658184](assets/test_evaluate_kernel.png)
 
@@ -395,7 +401,13 @@
   > 	test_data: np.ndarray, shape (K, N), kernel matrix of test data
   > 	weights: Kernel PCA or LDA weights, shape (N, E)
   > 	k_neighbors: int, k-NN
-
+  >
+  > 
+  >
+  > To project the data onto low dimensional space,
+  >
+  > $Z = K(X, X)A$
+  
   ![image-20230614175944578](assets/test_classify.png)
 
 ### t-SNE
