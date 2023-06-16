@@ -383,7 +383,7 @@
   >
   > 
   >
-  > Before classify the test data, we have to calculate kernel matrix.
+  > Before classifying the test data, we have to calculate kernel matrix.
 
   ![image-20230615224658184](assets/test_evaluate_kernel.png)
 
@@ -404,14 +404,185 @@
 
 * Algorithms
   * Symmetric SNE
-    1. In practice, we calculate 
+    1. In practice, we calculate the conditional probability $p_{j|i}$ first in the original dimensional space.
+    
+       We also need to choose $N$ precisions for conditional probabilities to be the same perplexity (entropy) by using binary search.
+    
+       <img src="assets/conditional_p.png" alt="image-20230616144035338" style="zoom:67%;" />
+    
+       <img src="assets/perplexity.png" alt="image-20230616145019164" style="zoom: 50%;" />
+    
+    2. Calculate the joint probability $p_{ij}$
+    
+       <img src="assets/joint_p.png" alt="image-20230616144635452" style="zoom:67%;" />
+    
+    3. Calculate the joint probability $q_{ij}$ in the low dimensional space (gaussian distribution)
+    
+       At the initial time, we need to randomly initialize $y$
+    
+       <img src="assets/s_sne_joint_q.png" alt="image-20230616145337286" style="zoom: 50%;" />
+    
+    4.  Calculate the gradient for each $y_i$
+    
+       <img src="assets/s_sne_loss.png" alt="image-20230616145922711" style="zoom: 50%;" />
+    
+       <img src="assets/s_sne_grad.png" alt="image-20230616145819630" style="zoom: 80%;" />
+    
+    5. Use optimization algorithm to update $y_i$ 
+    
+    6. Repeat 3rd, 4th and 5th steps until achieving the maximum loop or coverage
+    
   * t-SNE
+  
+    1. In practice, we calculate the conditional probability $p_{j|i}$ first in the original dimensional space.
+  
+       We also need to choose $N$ precisions for conditional probabilities to be the same perplexity (entropy) by using binary search.
+  
+       <img src="assets/conditional_p.png" alt="image-20230616144035338" style="zoom:67%;" />
+  
+       <img src="assets/perplexity.png" alt="image-20230616145019164" style="zoom: 50%;" />
+  
+    2. Calculate the joint probability $p_{ij}$
+  
+       <img src="assets/joint_p.png" alt="image-20230616144635452" style="zoom:67%;" />
+  
+    3. Calculate the joint probability $q_{ij}$ in the low dimensional space (student t-distribution)
+  
+       At the initial time, we need to randomly initialize $y$
+  
+       <img src="assets/t_sne_joint_q.png" alt="image-20230616150133286" style="zoom: 50%;" />
+  
+    4.  Calculate the gradient for each $y_i$
+  
+       <img src="assets/s_sne_loss.png" alt="image-20230616145922711" style="zoom: 50%;" />
+  
+       <img src="assets/t_sne_grad.png" alt="image-20230616151757695" style="zoom: 50%;" />
+  
+    5. Use optimization algorithm to update $y_i$ 
+  
+    6. Repeat 3rd, 4th and 5th steps until achieving the maximum loop or coverage
+
+* `sne` function: initialize variables, such as variables for optimization algorithm, variable $Y$ for low dimensional space...
+
+  > About PCA algorithm, the authors mention it in the paper, [Visualizing Data using t-SNE](https://lvdmaaten.github.io/publications/papers/JMLR_2008.pdf).
+  >
+  > So, they want to speed up the computation of pairwise distances between the datapoints.
+  >
+  > <img src="assets/sne/pca.png" alt="image-20230616152942480" style="zoom:67%;" />
+
+  ![image-20230616152534520](assets/sne/init.png)
+
+* `x2p` function: calculate $p_{i|j}$ conditional probability
+
+  > Here, it corresponds to the first step of s-SNE and t-SNE.
+  >
+  > 
+  >
+  > In practice, we calculate the conditional probability $p_{j|i}$ first in the original dimensional space.
+  >
+  > We also need to choose $N$ precisions for conditional probabilities to be the same perplexity (entropy) by using **binary search**.
+  >
+  > <img src="assets/conditional_p.png" alt="image-20230616144035338" style="zoom:67%;" />
+  >
+  > <img src="assets/perplexity.png" alt="image-20230616145019164" style="zoom: 50%;" />
+
+  ![image-20230616153450466](assets/sne/x2p.png)
+
+* `sne` function: after calculating the conditional probability $p_{i|j}$, then calculate joint probability $p_{ij}$
+
+  > Here, it corresponds to the second step of s-SNE and t-SNE.
+  >
+  > 
+  >
+  > Calculate the joint probability $p_{ij}$
+  >
+  > <img src="assets/joint_p.png" alt="image-20230616144635452" style="zoom:67%;" />
+  >
+  > **Note**, you may notice that the denominator part is `np.sum(P)`.
+  >
+  > Because we already calculated the element-wise sum between $p_{j|i}$ and $p_{i|j}$ and also sum each row of $p_{j|i}$ or $p_{i|j}$ is equal to 1, the authors just sum them all as $2N$.
+  >
+  > (In my opinion, it is a little waste of computation. We could just calculate it with the shape size. I don't know why they do it like this.)
+  >
+  > 
+  >
+  > The early exaggeration method is just used for optimization. So, I don't explain it detailed. You could check their paper.
+  >
+  > The last line is used for numerical stability to avoid zero value.
+
+  ![image-20230616153317742](assets/sne/joint_p.png)
+
+* `sne` function: optimize low dimensional feature $y_i$
+
+  > Here, it corresponds to the 3rd, 4th and 5th step of s-SNE and t-SNE.
+  >
+  > 
+  >
+  > 3rd step (**Compute pairwise affinities**)
+  >
+  > * s-SNE (gaussian distribution)
+  >
+  >   <img src="assets/s_sne_joint_q.png" alt="image-20230616145337286" style="zoom: 50%;" />
+  >
+  > * t-SNE (student t-distribution)
+  >
+  >   <img src="assets/t_sne_joint_q.png" alt="image-20230616150133286" style="zoom: 50%;" />
+  >
+  > 4th step (**Compute gradient**)
+  >
+  > * s-SNE
+  >
+  >   <img src="assets/s_sne_grad.png" alt="image-20230616161348776" style="zoom: 80%;" />
+  >
+  > * t-SNE
+  >
+  >   <img src="assets/t_sne_grad.png" alt="image-20230616151757695" style="zoom: 50%;" />
+  >
+  > 5th step
+  >
+  > Use optimization algorithm to update $y_i$
+
+  ![image-20230616155016941](assets/sne/joint_q_loop.png)
 
 #### Part2
 
+* `sne` function: record optimization procedure every 10 iterations
+
+  ![image-20230616155852973](assets/sne/record.png)
+
+* `draw_results` function: draw low dimensional points $Y$ on the figure
+
+  ![image-20230616155921683](assets/sne/draw_results.png)
+
+* `sne` function: save the results in gif format
+
+  ![image-20230616160227289](assets/sne/sne_last.png)
+
 #### Part3
 
+* `sne` function: visualize similarities $p_{ij}$ and $q_{ij}$
+
+  ![image-20230616160227289](assets/sne/sne_last.png)
+
+*  `visualize_similarities` function: visualize similarities $p_{ij}$ and $q_{ij}$
+
+  > First, we sort the similarity matrix with gt labels in order to watch the relationship between the cluster and the gt labels.
+  >
+  > Then, normalize the similarity matrix by min-max normalization algorithm to keep their original relative similarity.
+
+  ![image-20230616160441698](assets/sne/vis_similarities.png)
+
 #### Part4
+
+* `tsne.py` script: entry point
+
+  > Use Enum class to control which mode I would like to use.
+  >
+  > Use arguments to control the algorithm and perplexity value.
+
+  ![image-20230616152450950](assets/sne/mode.png)
+
+  ![image-20230616152404518](assets/sne/entry.png)
 
 ## Experiments settings and results & Discussion
 
@@ -485,7 +656,7 @@ K-NN algorithm: PCA, LDA (Fisher)
 
 From the results of s-SNE and t-SNE, we can know that the s-SNE has crowded problem (data points with different labels are highly overlapped).
 
-So, in the low dimensional space, it proves that t-SNE uses t-distribution to formulate the data points better than s-SNE's.
+So, in the low dimensional space, it proves that t-SNE uses student t-distribution to formulate the data points better than s-SNE's.
 
 ##### Results
 
@@ -499,11 +670,11 @@ So, in the low dimensional space, it proves that t-SNE uses t-distribution to fo
 
 #### Part2
 
-* s-SNE ([imgur](https://i.imgur.com/z9Nf4se.gif))
+* s-SNE ([imgur gif](https://i.imgur.com/z9Nf4se.gif))
 
   ![s-sne_history](assets/output_20/s-sne_history.gif)
 
-* t-SNE ([imgur](https://i.imgur.com/b3Z7cvK.gif))
+* t-SNE ([imgur gif](https://i.imgur.com/b3Z7cvK.gif))
 
   ![t-sne_history](assets/output_20/t-sne_history.gif)
 
@@ -583,4 +754,20 @@ So, in the low dimensional space, it proves that t-SNE uses t-distribution to fo
 
 ## Observations and discussion
 
-* Coming soon...
+### Meaning of eigenface
+
+The eigenfaces (eigenvectors) is extracted from eigen decomposition of the covariance matrix of data $X$.
+
+In the geometry meaning, this process is to extract the independent vectors (eigenvectors).
+
+The linear combination of these independent vectors can be the original data point.
+
+So, a eigenface represents one of variance of human face that can be an independent factor.
+
+* Eigenvectors (eigenfaces)
+
+  ![img](https://www.visiondummy.com/wp-content/uploads/2014/04/eigenvectors.png)
+
+* Eigenvalues versus covariance
+
+![img](https://www.visiondummy.com/wp-content/uploads/2014/04/eigenvectors_covariance.png)
