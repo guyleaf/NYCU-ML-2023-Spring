@@ -46,18 +46,19 @@ def solve_by_pca(
         "seconds",
     )
 
+    # find num_components largest eigenvectors
     indices = np.argsort(eigenvalues)[: -num_components - 1 : -1]
     eigenvectors = eigenvectors[:, indices]
     return eigenvectors
 
 
-def calculate_between_and_with_class_covariance(
+def calculate_between_and_within_class_covariance(
     x: npt.NDArray[np.float64], labels: npt.NDArray[np.int32], kernel_type: KERNEL_TYPES
 ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     # calculate global mean: normal + kernel
     global_mean: npt.NDArray[np.float64] = np.mean(x, axis=0, keepdims=True)
 
-    # calculate with-class & between-class covariance
+    # calculate within-class & between-class covariance
     groups, counts = np.unique(labels, return_counts=True)
     covariance_between_class = np.zeros((x.shape[1],) * 2, dtype=np.float64)
     covariance_within_class = np.zeros_like(covariance_between_class)
@@ -106,7 +107,7 @@ def solve_by_fisher(
     (
         covariance_between_class,
         covariance_within_class,
-    ) = calculate_between_and_with_class_covariance(x, labels, kernel_type)
+    ) = calculate_between_and_within_class_covariance(x, labels, kernel_type)
 
     print(
         "Finished calculating covariances in",
@@ -114,9 +115,9 @@ def solve_by_fisher(
         "seconds",
     )
 
-    # S_w^-1 * S_b
     start_time = timeit.default_timer()
 
+    # S_w^-1 * S_b
     inversed_covariance_within_class = np.linalg.pinv(covariance_within_class)
     eigenvalues, eigenvectors = np.linalg.eigh(
         inversed_covariance_within_class @ covariance_between_class
@@ -128,22 +129,10 @@ def solve_by_fisher(
         "seconds",
     )
 
+    # find num_components largest eigenvectors
     indices = np.argsort(eigenvalues)[: -num_components - 1 : -1]
     eigenvectors = eigenvectors[:, indices]
     return eigenvectors
-
-
-def preprocess(x: npt.NDArray[np.float64], kernel_type: KERNEL_TYPES):
-    centered_x = None
-    if kernel_type != "none":
-        # N by N matrix
-        x = kernel(x, x, kernel_type)
-        centered_x = kernel(x, x, kernel_type, center=True)
-    else:
-        # D by D matrix
-        x = np.cov(x, rowvar=False, bias=True)
-
-    return x, centered_x
 
 
 if __name__ == "__main__":
@@ -155,14 +144,19 @@ if __name__ == "__main__":
     files = glob.glob(pattern)
 
     data, labels, _ = load_data(files)
-    x, centered_x = preprocess(data, args.kernel)
 
     if args.kernel != "none":
+        # PCA assumes the kernel is centered
+        centered_x = kernel(data, data, args.kernel, center=True) / data.shape[0]
+        x = kernel(data, data, args.kernel)
+
         pca_weights = solve_by_pca(centered_x, args.kernel, args.num_components)
         fisher_weights = solve_by_fisher(x, labels, args.kernel, args.num_components)
         np.save(os.path.join(args.out_dir, "kernel_eigen.npy"), pca_weights)
         np.save(os.path.join(args.out_dir, "kernel_fisher.npy"), fisher_weights)
     else:
+        x = np.cov(data, rowvar=False, bias=True)
+
         pca_weights = solve_by_pca(x, args.kernel, args.num_components)
         fisher_weights = solve_by_fisher(data, labels, args.kernel, args.num_components)
         np.save(os.path.join(args.out_dir, "eigen.npy"), pca_weights)

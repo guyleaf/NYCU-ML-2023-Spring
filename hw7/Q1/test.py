@@ -70,7 +70,7 @@ def visualize_faces(
     # D: features
     # E: num_components
     # samples: N by D matrix
-    # weights: N by E matrix
+    # weights: D by E matrix
     width, height = image_size
     os.makedirs(out_dir, exist_ok=True)
 
